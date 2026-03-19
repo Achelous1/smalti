@@ -19,7 +19,7 @@ AIDE는 CLI 기반 AI 코드 에이전트(Claude Code, Gemini CLI, Codex CLI)를
 | Data Storage | JSON (electron-store) | 설정/플러그인 스펙 로컬 저장 |
 | Test | Vitest + Playwright | Vitest(유닛), Playwright(E2E) - Electron 커뮤니티 주류 |
 | CI/CD | GitHub Actions | 표준 CI/CD, 멀티플랫폼 빌드 |
-| Package Manager | pnpm | 빠른 설치, 디스크 효율 |
+| Package Manager | pnpm (`node-linker=hoisted`) | electron-forge 호환 필수, `.npmrc` 설정 |
 | Platform | macOS, Windows | 크로스 플랫폼 |
 
 ---
@@ -322,13 +322,16 @@ interface AideAPI {
 
 ```
 aide/
-├── package.json
-├── forge.config.ts              # electron-forge 설정
+├── package.json                 # type: "module", pnpm.onlyBuiltDependencies
+├── .npmrc                       # node-linker=hoisted (electron-forge 필수)
+├── forge.config.ts              # electron-forge 설정 (asar unpack 포함)
 ├── tsconfig.json
-├── tailwind.config.ts
+├── tailwind.config.js
+├── postcss.config.js
+├── index.html                   # CSP meta 태그 포함
 ├── vite.main.config.ts          # Main Process 빌드
 ├── vite.preload.config.ts       # Preload 빌드
-├── vite.renderer.config.ts      # Renderer 빌드
+├── vite.renderer.config.ts      # Renderer 빌드 (React + path alias)
 │
 ├── src/
 │   ├── main/                    # Electron Main Process
@@ -351,7 +354,9 @@ aide/
 │   │   │   ├── git-service.ts   # simple-git 래퍼
 │   │   │   └── github-service.ts# octokit 래퍼
 │   │   └── ipc/
-│   │       └── handlers.ts      # IPC 핸들러 등록
+│   │       ├── channels.ts      # IPC 채널 상수 정의 (single source of truth)
+│   │       ├── handlers.ts      # IPC 핸들러 등록
+│   │       └── terminal-handlers.ts # 터미널 IPC 핸들러
 │   │
 │   ├── preload/
 │   │   └── index.ts             # contextBridge API 노출
@@ -399,27 +404,29 @@ aide/
 ```json
 {
   "dependencies": {
-    "xterm": "^5.x",
-    "xterm-addon-fit": "^0.8.x",
+    "@xterm/xterm": "^5.5.x",
+    "@xterm/addon-fit": "^0.10.x",
     "node-pty": "^1.x",
     "electron-store": "^8.x",
     "simple-git": "^3.x",
-    "@octokit/rest": "^20.x",
     "chokidar": "^3.x",
-    "zustand": "^4.x"
+    "zustand": "^5.x",
+    "react": "^19.x",
+    "react-dom": "^19.x"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.x",
     "@electron-forge/plugin-vite": "^7.x",
-    "react": "^19.x",
-    "react-dom": "^19.x",
+    "@vitejs/plugin-react": "^4.x",
     "typescript": "^5.x",
-    "tailwindcss": "^4.x",
+    "tailwindcss": "^3.x",
     "vitest": "^3.x",
     "@playwright/test": "^1.x"
   }
 }
 ```
+
+> **Note**: xterm.js는 v5부터 `@xterm/xterm` 스코프 패키지로 변경됨. Tailwind CSS는 v3 사용 (v4는 PostCSS 통합 방식 변경으로 electron-forge와 호환성 이슈).
 
 ---
 
@@ -434,8 +441,10 @@ aide/
 ### Electron Security
 - `contextIsolation: true` — Renderer에서 Node.js 직접 접근 불가
 - `nodeIntegration: false` — preload script를 통한 안전한 API 노출
-- CSP(Content Security Policy) 설정
+- `sandbox: false` — node-pty가 preload에서 동작하기 위해 필요 (필수 트레이드오프)
+- CSP(Content Security Policy) meta 태그로 `index.html`에 설정
 - 외부 URL 로드 차단
+- Electron Fuses로 패키징 시 RunAsNode, NodeOptions 등 비활성화
 
 ### Agent Process
 - 에이전트 프로세스는 사용자 권한으로 실행 (별도 권한 상승 없음)
@@ -453,7 +462,39 @@ aide/
 | 파일 경로 | POSIX | Win32 (path.sep 처리) |
 | 빌드 | .dmg / .app | .exe / NSIS installer |
 
-electron-forge가 `@electron-forge/maker-dmg`(macOS), `@electron-forge/maker-squirrel`(Windows)로 플랫폼별 패키징 처리.
+electron-forge가 `MakerZIP`(macOS), `MakerSquirrel`(Windows)로 플랫폼별 패키징 처리.
+
+### pnpm 설정
+
+electron-forge는 pnpm의 기본 symlink 방식과 호환되지 않는다. 반드시 프로젝트 루트에 `.npmrc` 설정 필요:
+
+```ini
+# .npmrc
+node-linker=hoisted
+```
+
+네이티브 모듈(electron, node-pty, esbuild) 빌드를 허용하기 위해 `package.json`에 설정:
+
+```json
+{
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild", "node-pty"]
+  }
+}
+```
+
+### node-pty 패키징
+
+node-pty는 네이티브 모듈이므로 asar 아카이브에서 unpack 필요:
+
+```typescript
+// forge.config.ts
+packagerConfig: {
+  asar: {
+    unpack: '**/node_modules/node-pty/**/*',
+  },
+}
+```
 
 ---
 
