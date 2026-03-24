@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import type { WorkspaceInfo } from '../../../types/ipc';
 import { useWorkspaceStore } from '../../stores/workspace-store';
 
@@ -45,6 +46,16 @@ interface WelcomePageProps {
 }
 
 export function WelcomePage({ recentProjects }: WelcomePageProps) {
+  const [showNameInput, setShowNameInput] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showNameInput && nameInputRef.current) {
+      nameInputRef.current.focus();
+    }
+  }, [showNameInput]);
+
   async function handleOpenRepository() {
     try {
       const path = await window.aide.workspace.openDialog();
@@ -58,15 +69,22 @@ export function WelcomePage({ recentProjects }: WelcomePageProps) {
   }
 
   async function handleNewProject() {
+    if (!showNameInput) {
+      setShowNameInput(true);
+      return;
+    }
+    const name = projectName.trim();
+    if (!name) return;
     try {
-      const name = prompt('Enter project name:');
-      if (!name) return;
       const workspace = await window.aide.workspace.createProject(name);
       if (!workspace) return;
       useWorkspaceStore.getState().addWorkspace(workspace);
       useWorkspaceStore.getState().setActive(workspace.id);
     } catch (err) {
       console.error('Failed to create project:', err);
+    } finally {
+      setShowNameInput(false);
+      setProjectName('');
     }
   }
 
@@ -109,6 +127,34 @@ export function WelcomePage({ recentProjects }: WelcomePageProps) {
             </p>
           </div>
 
+          {/* Project name input (shown when + New Project clicked) */}
+          {showNameInput && (
+            <div className="flex gap-2">
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleNewProject(); if (e.key === 'Escape') { setShowNameInput(false); setProjectName(''); } }}
+                placeholder="Project name..."
+                className="flex-1 px-3 py-2 rounded text-sm bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)]"
+              />
+              <button
+                onClick={handleNewProject}
+                disabled={!projectName.trim()}
+                className="px-4 py-2 rounded text-sm font-medium bg-[var(--accent)] text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                Create
+              </button>
+              <button
+                onClick={() => { setShowNameInput(false); setProjectName(''); }}
+                className="px-3 py-2 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex gap-3">
             <button
@@ -118,7 +164,7 @@ export function WelcomePage({ recentProjects }: WelcomePageProps) {
               Open Repository
             </button>
             <button
-              onClick={handleNewProject}
+              onClick={() => setShowNameInput(true)}
               className="flex-1 px-4 py-2 rounded text-sm font-medium border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors"
             >
               + New Project
