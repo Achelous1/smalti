@@ -3,6 +3,7 @@ import path from 'path';
 import { registerIpcHandlers } from './ipc/handlers';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 if (require('electron-squirrel-startup')) {
   app.quit();
 }

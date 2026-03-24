@@ -1,4 +1,4 @@
-import { type IpcMain, type WebContents, BrowserWindow } from 'electron';
+import { type IpcMain, BrowserWindow } from 'electron';
 import * as pty from 'node-pty';
 import os from 'os';
 import { IPC_CHANNELS } from './channels';
