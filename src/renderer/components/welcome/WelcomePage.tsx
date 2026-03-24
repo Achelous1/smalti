@@ -1,4 +1,5 @@
 import type { WorkspaceInfo } from '../../../types/ipc';
+import { useWorkspaceStore } from '../../stores/workspace-store';
 
 function formatRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -44,16 +45,29 @@ interface WelcomePageProps {
 }
 
 export function WelcomePage({ recentProjects }: WelcomePageProps) {
-  function handleOpenRepository() {
-    window.aide.workspace.open('');
+  async function handleOpenRepository() {
+    const path = await window.aide.workspace.openDialog();
+    if (!path) return;
+    const workspace = await window.aide.workspace.create(path);
+    useWorkspaceStore.getState().addWorkspace(workspace);
+    useWorkspaceStore.getState().setActive(workspace.id);
   }
 
-  function handleNewProject() {
-    window.aide.workspace.create('');
+  async function handleNewProject() {
+    const path = await window.aide.workspace.openDialog();
+    if (!path) return;
+    const workspace = await window.aide.workspace.create(path);
+    useWorkspaceStore.getState().addWorkspace(workspace);
+    useWorkspaceStore.getState().setActive(workspace.id);
   }
 
-  function handleOpenRecent(path: string) {
-    window.aide.workspace.open(path);
+  async function handleOpenRecent(path: string) {
+    await window.aide.workspace.open(path);
+    const workspaces = useWorkspaceStore.getState().workspaces;
+    const workspace = workspaces.find((w) => w.path === path);
+    if (workspace) {
+      useWorkspaceStore.getState().setActive(workspace.id);
+    }
   }
 
   return (

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { TitleBar } from './components/layout/TitleBar';
 import { StatusBar } from './components/layout/StatusBar';
 import { WorkspaceNav } from './components/workspace/WorkspaceNav';
@@ -5,14 +6,37 @@ import { TabBar } from './components/terminal/TabBar';
 import { TerminalPanel } from './components/terminal/TerminalPanel';
 import { WelcomePage } from './components/welcome/WelcomePage';
 import { useWorkspaceStore } from './stores/workspace-store';
+import { useTerminalStore } from './stores/terminal-store';
 
 export function App() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const recentProjects = useWorkspaceStore((s) => s.recentProjects);
+  const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces);
+  const tabs = useTerminalStore((s) => s.tabs);
+  const activeTabId = useTerminalStore((s) => s.activeTabId);
+  const createDefaultTab = useTerminalStore((s) => s.createDefaultTab);
+  const updateTabSession = useTerminalStore((s) => s.updateTabSession);
+
+  useEffect(() => {
+    loadWorkspaces();
+  }, [loadWorkspaces]);
+
+  // Auto-create a default shell tab when workspace is first loaded
+  useEffect(() => {
+    if (!activeWorkspaceId || tabs.length > 0) return;
+    const tabId = createDefaultTab();
+    window.aide.terminal.spawn().then((sessionId) => {
+      updateTabSession(tabId, sessionId);
+    }).catch(() => {
+      // ignore spawn errors
+    });
+  }, [activeWorkspaceId, tabs.length, createDefaultTab, updateTabSession]);
 
   if (!activeWorkspaceId) {
     return <WelcomePage recentProjects={recentProjects} />;
   }
+
+  const activeTab = tabs.find((t) => t.id === activeTabId);
 
   return (
     <div className="flex flex-col h-screen bg-aide-background text-aide-text-primary overflow-hidden">
@@ -36,7 +60,7 @@ export function App() {
         <div className="flex flex-col flex-1 overflow-hidden">
           <TabBar />
           <div className="flex-1 overflow-hidden">
-            <TerminalPanel />
+            {activeTab && <TerminalPanel sessionId={activeTab.sessionId} />}
           </div>
         </div>
       </div>

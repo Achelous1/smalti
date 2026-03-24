@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useTerminalStore } from '../../stores/terminal-store';
 import { useAgentStore } from '../../stores/agent-store';
-import type { TerminalTab } from '../../../types/ipc';
 
 interface AgentOption {
   id: string;
@@ -9,6 +8,7 @@ interface AgentOption {
   hint: string;
   dotColor: string;
   type: 'agent' | 'shell';
+  command?: string;
   dividerBefore?: boolean;
 }
 
@@ -19,6 +19,7 @@ const AGENT_OPTIONS: AgentOption[] = [
     hint: 'Claude Code',
     dotColor: 'var(--agent-claude)',
     type: 'agent',
+    command: 'claude',
   },
   {
     id: 'gemini',
@@ -26,6 +27,7 @@ const AGENT_OPTIONS: AgentOption[] = [
     hint: 'Gemini CLI',
     dotColor: 'var(--agent-gemini)',
     type: 'agent',
+    command: 'gemini',
   },
   {
     id: 'codex',
@@ -33,6 +35,7 @@ const AGENT_OPTIONS: AgentOption[] = [
     hint: 'Codex CLI',
     dotColor: 'var(--agent-codex)',
     type: 'agent',
+    command: 'codex',
   },
   {
     id: 'shell',
@@ -45,7 +48,7 @@ const AGENT_OPTIONS: AgentOption[] = [
 ];
 
 export function AgentDropdown() {
-  const { addTab, setActiveTab, toggleDropdown } = useTerminalStore();
+  const { addTab, setActiveTab, toggleDropdown, updateTabSession } = useTerminalStore();
   const { installedAgents } = useAgentStore();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -68,17 +71,21 @@ export function AgentDropdown() {
   const handleSelect = async (option: AgentOption) => {
     if (!isInstalled(option.id)) return;
 
+    const tabId = crypto.randomUUID();
+    addTab({
+      id: tabId,
+      type: option.type,
+      agentId: option.type === 'agent' ? option.id : undefined,
+      sessionId: '',
+      title: option.label,
+    });
+    setActiveTab(tabId);
+
     try {
-      const sessionId = await window.aide.terminal.spawn();
-      const tab: TerminalTab = {
-        id: `${option.id}-${Date.now()}`,
-        type: option.type,
-        agentId: option.type === 'agent' ? option.id : undefined,
-        sessionId,
-        title: option.label,
-      };
-      addTab(tab);
-      setActiveTab(tab.id);
+      const sessionId = await window.aide.terminal.spawn(
+        option.command ? { shell: option.command } : undefined
+      );
+      updateTabSession(tabId, sessionId);
     } catch {
       // ignore spawn errors
     }

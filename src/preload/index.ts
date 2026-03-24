@@ -37,6 +37,7 @@ const aideAPI: AideAPI = {
     open: (path: string) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_OPEN, path),
     remove: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_REMOVE, id),
     recent: () => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_RECENT),
+    openDialog: () => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_OPEN_DIALOG),
   },
 
   agent: {

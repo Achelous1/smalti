@@ -70,6 +70,7 @@ export interface AideAPI {
     open(path: string): Promise<void>;
     remove(id: string): Promise<void>;
     recent(): Promise<WorkspaceInfo[]>;
+    openDialog(): Promise<string | null>;
   };
   agent: {
     detect(): Promise<AgentConfig[]>;

@@ -49,13 +49,27 @@ export function TabBar() {
             <span
               role="button"
               tabIndex={0}
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
+                if (tab.sessionId) {
+                  try {
+                    await window.aide.terminal.kill(tab.sessionId);
+                  } catch {
+                    // ignore kill errors
+                  }
+                }
                 removeTab(tab.id);
               }}
-              onKeyDown={(e) => {
+              onKeyDown={async (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.stopPropagation();
+                  if (tab.sessionId) {
+                    try {
+                      await window.aide.terminal.kill(tab.sessionId);
+                    } catch {
+                      // ignore kill errors
+                    }
+                  }
                   removeTab(tab.id);
                 }
               }}

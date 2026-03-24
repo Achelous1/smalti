@@ -9,18 +9,40 @@ interface TerminalState {
   removeTab: (id: string) => void;
   setActiveTab: (id: string | null) => void;
   toggleDropdown: () => void;
+  updateTabSession: (tabId: string, sessionId: string) => void;
+  createDefaultTab: () => string;
 }
 
-export const useTerminalStore = create<TerminalState>((set) => ({
+export const useTerminalStore = create<TerminalState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   dropdownOpen: false,
   addTab: (tab) => set((state) => ({ tabs: [...state.tabs, tab] })),
   removeTab: (id) =>
-    set((state) => ({
-      tabs: state.tabs.filter((t) => t.id !== id),
-      activeTabId: state.activeTabId === id ? null : state.activeTabId,
-    })),
+    set((state) => {
+      const remaining = state.tabs.filter((t) => t.id !== id);
+      let nextActiveId = state.activeTabId;
+      if (state.activeTabId === id) {
+        nextActiveId = remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+      }
+      return { tabs: remaining, activeTabId: nextActiveId };
+    }),
   setActiveTab: (id) => set({ activeTabId: id }),
   toggleDropdown: () => set((state) => ({ dropdownOpen: !state.dropdownOpen })),
+  updateTabSession: (tabId, sessionId) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, sessionId } : t)),
+    })),
+  createDefaultTab: () => {
+    const tabId = crypto.randomUUID();
+    const tab: TerminalTab = {
+      id: tabId,
+      type: 'shell',
+      sessionId: '',
+      title: '$ shell',
+    };
+    get().addTab(tab);
+    get().setActiveTab(tabId);
+    return tabId;
+  },
 }));

@@ -11,6 +11,7 @@ interface WorkspaceState {
   setActive: (id: string | null) => void;
   toggleNav: () => void;
   loadRecent: (projects: WorkspaceInfo[]) => void;
+  loadWorkspaces: () => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -25,4 +26,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setActive: (id) => set({ activeWorkspaceId: id }),
   toggleNav: () => set((state) => ({ navExpanded: !state.navExpanded })),
   loadRecent: (projects) => set({ recentProjects: projects.slice(0, 5) }),
+  loadWorkspaces: async () => {
+    const [workspaces, recent] = await Promise.all([
+      window.aide.workspace.list(),
+      window.aide.workspace.recent(),
+    ]);
+    set({ workspaces, recentProjects: recent.slice(0, 5) });
+  },
 }));
