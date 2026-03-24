@@ -42,4 +42,5 @@ export const IPC_CHANNELS = {
   WORKSPACE_REMOVE: 'workspace:remove',
   WORKSPACE_RECENT: 'workspace:recent',
   WORKSPACE_OPEN_DIALOG: 'workspace:open-dialog',
+  WORKSPACE_CREATE_PROJECT: 'workspace:create-project',
 } as const;

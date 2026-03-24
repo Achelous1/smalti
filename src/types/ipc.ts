@@ -71,6 +71,7 @@ export interface AideAPI {
     remove(id: string): Promise<void>;
     recent(): Promise<WorkspaceInfo[]>;
     openDialog(): Promise<string | null>;
+    createProject(name: string): Promise<WorkspaceInfo | null>;
   };
   agent: {
     detect(): Promise<AgentConfig[]>;

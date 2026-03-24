@@ -94,4 +94,29 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
   });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_CREATE_PROJECT, async (_event, projectName: string) => {
+    const win = BrowserWindow.getFocusedWindow();
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Select parent directory for new project',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const projectPath = nodePath.join(result.filePaths[0], projectName);
+    if (!fs.existsSync(projectPath)) {
+      fs.mkdirSync(projectPath, { recursive: true });
+    }
+    const counter = incrementCounter();
+    const workspace: WorkspaceInfo = {
+      id: `workspace-${counter}`,
+      name: projectName,
+      path: projectPath,
+      color: nextColor(counter),
+      lastOpened: Date.now(),
+    };
+    const workspaces = getWorkspaces();
+    workspaces.push(workspace);
+    setWorkspaces(workspaces);
+    return workspace;
+  });
 }

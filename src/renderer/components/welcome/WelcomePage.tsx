@@ -59,9 +59,10 @@ export function WelcomePage({ recentProjects }: WelcomePageProps) {
 
   async function handleNewProject() {
     try {
-      const path = await window.aide.workspace.openDialog();
-      if (!path) return;
-      const workspace = await window.aide.workspace.create(path);
+      const name = prompt('Enter project name:');
+      if (!name) return;
+      const workspace = await window.aide.workspace.createProject(name);
+      if (!workspace) return;
       useWorkspaceStore.getState().addWorkspace(workspace);
       useWorkspaceStore.getState().setActive(workspace.id);
     } catch (err) {
