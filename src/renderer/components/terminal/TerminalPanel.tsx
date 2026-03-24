@@ -3,12 +3,16 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-export function TerminalPanel() {
+interface TerminalPanelProps {
+  sessionId: string;
+}
+
+export function TerminalPanel({ sessionId }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
 
+  // Initialize xterm once
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -40,47 +44,49 @@ export function TerminalPanel() {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Spawn a shell session
-    window.aide.terminal.spawn().then((id) => {
-      sessionIdRef.current = id;
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddonRef.current?.fit();
     });
-
-    // Send user input to pty
-    terminal.onData((data) => {
-      if (sessionIdRef.current) {
-        window.aide.terminal.write(sessionIdRef.current, data);
-      }
-    });
-
-    // Receive pty output
-    const unsubscribe = window.aide.terminal.onData((_sessionId, data) => {
-      terminal.write(data);
-    });
-
-    // Handle resize
-    const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current && sessionIdRef.current) {
-        fitAddonRef.current.fit();
-        window.aide.terminal.resize(
-          sessionIdRef.current,
-          terminalRef.current.cols,
-          terminalRef.current.rows
-        );
-      }
-    };
-
-    const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(containerRef.current);
 
     return () => {
       resizeObserver.disconnect();
-      unsubscribe();
-      if (sessionIdRef.current) {
-        window.aide.terminal.kill(sessionIdRef.current);
-      }
       terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
     };
   }, []);
+
+  // Connect to sessionId — re-runs when sessionId changes
+  useEffect(() => {
+    if (!sessionId || !terminalRef.current) return;
+
+    const terminal = terminalRef.current;
+    terminal.clear();
+
+    // Send user input to this session's pty
+    const inputDisposable = terminal.onData((data) => {
+      window.aide.terminal.write(sessionId, data);
+    });
+
+    // Receive output from this session's pty
+    const unsubscribe = window.aide.terminal.onData((incomingSessionId, data) => {
+      if (incomingSessionId === sessionId) {
+        terminal.write(data);
+      }
+    });
+
+    // Resize pty to match terminal dimensions
+    if (fitAddonRef.current) {
+      fitAddonRef.current.fit();
+      window.aide.terminal.resize(sessionId, terminal.cols, terminal.rows);
+    }
+
+    return () => {
+      inputDisposable.dispose();
+      unsubscribe();
+    };
+  }, [sessionId]);
 
   return (
     <div

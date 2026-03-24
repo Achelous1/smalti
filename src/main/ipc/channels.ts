@@ -32,4 +32,15 @@ export const IPC_CHANNELS = {
 
   // Agent
   AGENT_LIST_INSTALLED: 'agent:list-installed',
+  AGENT_DETECT: 'agent:detect',
+  AGENT_STATUS: 'agent:status',
+
+  // Workspace
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_CREATE: 'workspace:create',
+  WORKSPACE_OPEN: 'workspace:open',
+  WORKSPACE_REMOVE: 'workspace:remove',
+  WORKSPACE_RECENT: 'workspace:recent',
+  WORKSPACE_OPEN_DIALOG: 'workspace:open-dialog',
+  WORKSPACE_CREATE_PROJECT: 'workspace:create-project',
 } as const;
