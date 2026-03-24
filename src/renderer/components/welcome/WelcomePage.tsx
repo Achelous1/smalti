@@ -45,12 +45,14 @@ interface WelcomePageProps {
 
 export function WelcomePage({ recentProjects }: WelcomePageProps) {
   function handleOpenRepository() {
-    console.log('open repository');
     window.aide.workspace.open('');
   }
 
+  function handleNewProject() {
+    window.aide.workspace.create('');
+  }
+
   function handleOpenRecent(path: string) {
-    console.log('open recent:', path);
     window.aide.workspace.open(path);
   }
 
@@ -86,7 +88,7 @@ export function WelcomePage({ recentProjects }: WelcomePageProps) {
               Open Repository
             </button>
             <button
-              onClick={handleOpenRepository}
+              onClick={handleNewProject}
               className="flex-1 px-4 py-2 rounded text-sm font-medium border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--surface-elevated)] transition-colors"
             >
               + New Project

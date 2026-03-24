@@ -1,5 +1,6 @@
 import { type IpcMain } from 'electron';
 import fs from 'fs';
+import nodePath from 'path';
 import { IPC_CHANNELS } from './channels';
 import type { WorkspaceInfo } from '../../types/ipc';
 
@@ -29,7 +30,7 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     if (!fs.existsSync(path)) {
       throw new Error(`Path does not exist: ${path}`);
     }
-    const name = path.split('/').pop() || path;
+    const name = nodePath.basename(path) || path;
     const workspace: WorkspaceInfo = {
       id: `workspace-${++workspaceCounter}`,
       name,
