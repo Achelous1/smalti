@@ -9,6 +9,8 @@ export default defineConfig({
         'node-pty',
         'electron-store',
         'simple-git',
+        'chokidar',
+        'fsevents',
       ],
     },
   },
