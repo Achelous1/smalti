@@ -52,7 +52,13 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
         cols: 80,
         rows: 24,
         cwd,
-        env: process.env as Record<string, string>,
+        env: {
+          ...process.env as Record<string, string>,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor',
+          FORCE_COLOR: '1',
+          TERM_PROGRAM: 'AIDE',
+        },
       });
 
       const session: PtySession = {

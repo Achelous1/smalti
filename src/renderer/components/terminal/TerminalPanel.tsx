@@ -44,6 +44,7 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
       fontFamily: "'JetBrains Mono', 'IBM Plex Mono', Menlo, Monaco, monospace",
       fontSize: 13,
       cursorBlink: true,
+      cursorStyle: 'block',
       allowTransparency: false,
     });
 
