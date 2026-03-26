@@ -5,9 +5,10 @@ import '@xterm/xterm/css/xterm.css';
 
 interface TerminalPanelProps {
   sessionId: string;
+  visible?: boolean;
 }
 
-export function TerminalPanel({ sessionId }: TerminalPanelProps) {
+export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -62,13 +63,16 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current && terminalRef.current) {
-        fitAddonRef.current.fit();
-        const sid = sessionIdRef.current;
-        if (sid) {
-          window.aide.terminal.resize(sid, terminalRef.current.cols, terminalRef.current.rows);
-        }
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry || !fitAddonRef.current || !terminalRef.current) return;
+      const { width, height } = entry.contentRect;
+      // Skip when hidden (display: none → size is 0)
+      if (width === 0 || height === 0) return;
+      fitAddonRef.current.fit();
+      const sid = sessionIdRef.current;
+      if (sid) {
+        window.aide.terminal.resize(sid, terminalRef.current.cols, terminalRef.current.rows);
       }
     });
     resizeObserver.observe(containerRef.current);
@@ -80,6 +84,19 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
       fitAddonRef.current = null;
     };
   }, []);
+
+  // Re-fit when tab becomes visible (display: none → block)
+  useEffect(() => {
+    if (!visible || !fitAddonRef.current || !terminalRef.current) return;
+    const timer = setTimeout(() => {
+      fitAddonRef.current?.fit();
+      const sid = sessionIdRef.current;
+      if (sid && terminalRef.current) {
+        window.aide.terminal.resize(sid, terminalRef.current.cols, terminalRef.current.rows);
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   // Connect to sessionId — re-runs when sessionId changes
   useEffect(() => {

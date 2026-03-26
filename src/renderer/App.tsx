@@ -70,7 +70,7 @@ export function App() {
                 className="absolute inset-0"
                 style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
               >
-                {tab.sessionId && <TerminalPanel sessionId={tab.sessionId} />}
+                {tab.sessionId && <TerminalPanel sessionId={tab.sessionId} visible={tab.id === activeTabId} />}
               </div>
             ))}
           </div>
