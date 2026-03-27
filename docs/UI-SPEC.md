@@ -11,6 +11,7 @@
 |------|-------------|---------------|
 | Welcome | 앱 최초 실행 / 프로젝트 미선택 시 | Welcome (Dark/Light) |
 | Terminal | 프로젝트 작업 화면 (메인) | Dark/Light Theme, Nav Expanded |
+| Empty State | 모든 탭이 닫힌 상태 (에이전트 미선택) | Empty State (Dark/Light) |
 
 ---
 
@@ -110,6 +111,58 @@
 클릭 시: 해당 프로젝트를 바로 열고 Terminal Page로 이동.
 
 **데이터**: `electron-store`에 최근 프로젝트 목록 저장. 열 때마다 타임스탬프 갱신.
+
+---
+
+## 2.7 Empty State (모든 탭 닫힘)
+
+프로젝트가 열려있지만 모든 터미널 탭이 닫혔을 때 표시되는 화면. Terminal Page의 TabBar + MainArea 영역을 대체.
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────┐
+│ TitleBar (40px)                                  │
+├────┬──────┬──────────────────────────────────────┤
+│ WS │ File │ TabBar (36px) — 탭 없음, + 버튼만    │
+│ Nav│ Exp  ├──────────────────────────────────────┤
+│ 48 │ 220  │                                      │
+│    │      │         > aide_                      │
+│    │      │  Select an agent to start a session  │
+│    │      │                                      │
+│    │      │  [Claude] [Gemini] [Codex] [Terminal]│
+│    │      │                                      │
+├────┴──────┴──────────────────────────────────────┤
+│ StatusBar (24px)                                 │
+└─────────────────────────────────────────────────┘
+```
+
+### Hero Section
+
+| Element | Spec | 동작 |
+|---------|------|------|
+| Logo | `> aide_` (JetBrains Mono 48px bold, `--accent`) | 앱 브랜딩, 커서 깜빡임 가능 |
+| Subtitle | `Select an agent to start a new session` (14px, `--text-secondary`) | 안내 문구 |
+
+### Agent Selection Buttons (4개 카드 가로 배열)
+
+카드 크기: 180×120px, `cornerRadius: 8`, 배경 `--surface-elevated`, 카드 간격 16px.
+각 카드 상단에 에이전트 고유 색상 3px 보더 표시.
+
+| 카드 | 상단 보더 | 텍스트 색상 | Agent dot 색상 | Hint |
+|------|-----------|-------------|----------------|------|
+| Claude | `#D97706` (amber) | `#D97706` | `#D97706` | `Claude Code` |
+| Gemini | `#3B82F6` (blue) | `#3B82F6` | `#3B82F6` | `Gemini CLI` |
+| Codex | `#10B981` (green) | `#10B981` | `#10B981` | `Codex CLI` |
+| Terminal | `--text-tertiary` (gray) | `--text-secondary` | `--text-tertiary` | `$ shell` |
+
+**동작**: 카드 클릭 → 해당 에이전트/셸로 새 탭 생성 (`window.aide.terminal.spawn(...)`) → EmptyState 사라지고 새 탭 활성화.
+
+**미설치 에이전트**: `opacity-40`, hover 없음, `Not installed` 힌트 (Terminal 제외 — 항상 활성).
+
+### TabBar (Empty State 시)
+
+탭 없음. `+` 버튼만 표시. 클릭 시 EmptyState 카드와 동일하게 Agent Dropdown 표시.
 
 ---
 
@@ -237,7 +290,60 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 
 **비활성 에이전트**: 시스템에 미설치된 에이전트는 항목을 비활성(disabled) 처리하고 `Not installed` 힌트 표시.
 
-### 3.8 Terminal Area
+### 3.8 Split-Screen & Drag Interaction
+
+#### 분할 레이아웃
+
+메인 영역(MainArea)을 최대 3×2 그리드로 분할. 각 창(pane)은 독립 TabBar + 터미널/플러그인 영역을 보유.
+
+| 레이아웃 | 구성 | 구분선 |
+|----------|------|--------|
+| 단일 (기본) | 1×1 | 없음 |
+| 2×1 | 좌·우 2창 | 세로 1px border |
+| 3×1 | 좌·중·우 3창 | 세로 1px border ×2 |
+| 2×2 | 2행×2열 | 세로 + 가로 1px border |
+| 3×2 | 3열×2행 | 세로 ×2 + 가로 1px border |
+
+각 pane 헤더(28px):
+- 에이전트 dot (8px) + 세션명 — 터미널 탭
+- `◈` 아이콘 + 플러그인명 + accent 하단 보더(2px) — 플러그인 탭
+
+#### 드래그 상태 (Drag States)
+
+**탭 순서 변경 (Tab Reorder)**
+
+| 상태 | 시각 요소 | 스펙 |
+|------|-----------|------|
+| 드래그 원본 탭 | 투명도 감소 | `opacity: 0.35` |
+| Ghost 탭 | 커서 따라 이동하는 탭 미리보기 | `opacity: 0.92`, 파란 테두리 `#3B82F6 1px`, `cornerRadius: 6`, `layoutPosition: absolute` |
+| 삽입 위치 인디케이터 | 탭 사이 세로선 | `width: 2px`, `fill: #3B82F6`, TabBar 내 절대 위치 |
+| 드래그 커서 | `⠿` 문자 | 14px Inter, white, absolute overlay |
+
+**창 간 탭 이동 (Cross-Pane Drop)**
+
+| 상태 | 시각 요소 | 스펙 |
+|------|-----------|------|
+| 드롭 가능 창 | 반투명 파란 오버레이 | `fill: #3B82F633`, `stroke: #3B82F6 2px`, 창 전체 덮음 |
+| 드롭 안내 텍스트 | 중앙 레이블 | `"◈ Drop to open plugin here"`, 14px Inter, white |
+
+**창 크기 조절 (Pane Resize)**
+
+| 상태 | 시각 요소 | 스펙 |
+|------|-----------|------|
+| 기본 구분선 | 1px border | `fill: $--border`, `width/height: 1px` |
+| 호버/드래그 구분선 | 4px 파란 하이라이트 | `fill: #3B82F6`, `width/height: 4px` |
+| 리사이즈 핸들 | 중앙 버튼 오버레이 | 24×40px, `fill: $--surface-elevated`, `stroke: #3B82F6 1px`, `cornerRadius: 4` |
+| 핸들 아이콘 | 방향 화살표 | 세로 구분선: `↔`, 가로 구분선: `↕`, 16px Inter, `#3B82F6` |
+| 툴팁 | 안내 텍스트 | `"Drag to resize pane"`, 11px Inter, `fill: #1E293B`, `cornerRadius: 4`, 핸들 근처 절대 위치 |
+
+#### 플러그인 탭 식별자
+
+| 구분 | 탭 접두사 | 활성 탭 상단 보더 |
+|------|-----------|------------------|
+| 에이전트/셸 탭 | `●` (에이전트 컬러 dot) | accent 2px |
+| 플러그인 탭 | `◈` (accent 색상) | accent 2px |
+
+### 3.10 Terminal Area
 
 | Element | Spec | 동작 |
 |---------|------|------|
@@ -256,7 +362,7 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 - **멀티탭 보존**: 각 탭마다 독립 TerminalPanel 인스턴스, 비활성 탭은 `display: none`으로 숨김 (출력 보존)
 - **탭 닫기**: `window.aide.terminal.kill(sessionId)` → pty 종료 + 탭 제거 + 다음 탭 자동 전환
 
-### 3.9 StatusBar (24px)
+### 3.11 StatusBar (24px)
 
 | Element | Spec | 동작 |
 |---------|------|------|
@@ -265,7 +371,7 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 | Spacer | fill | — |
 | Agent Name | `claude-opus-4-6` (11px) | 현재 탭의 에이전트/모델명 표시 |
 
-### 3.10 Agent Auto-Detection
+### 3.12 Agent Auto-Detection
 
 앱 시작 시 시스템에 설치된 CLI 에이전트를 자동 감지.
 
