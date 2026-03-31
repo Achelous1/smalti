@@ -1,17 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { TitleBar } from './components/layout/TitleBar';
 import { StatusBar } from './components/layout/StatusBar';
+import { SplitContainer } from './components/layout/SplitContainer';
 import { WorkspaceNav } from './components/workspace/WorkspaceNav';
-import { TabBar } from './components/terminal/TabBar';
-import { TerminalPanel } from './components/terminal/TerminalPanel';
 import { WelcomePage } from './components/welcome/WelcomePage';
 import { FileExplorer } from './components/file-explorer/FileExplorer';
 import { PluginPanel } from './components/plugin/PluginPanel';
-import { GitHubPanel } from './components/github/GitHubPanel';
 import { useWorkspaceStore } from './stores/workspace-store';
 import { useTerminalStore } from './stores/terminal-store';
-
-type SidePanel = 'explorer' | 'plugins' | 'github';
+import { useLayoutStore } from './stores/layout-store';
 
 export function App() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -19,11 +16,11 @@ export function App() {
   const recentProjects = useWorkspaceStore((s) => s.recentProjects);
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces);
   const tabs = useTerminalStore((s) => s.tabs);
-  const activeTabId = useTerminalStore((s) => s.activeTabId);
-  const workspaceTabs = useTerminalStore((s) => s.workspaceTabs);
   const createDefaultTab = useTerminalStore((s) => s.createDefaultTab);
   const updateTabSession = useTerminalStore((s) => s.updateTabSession);
-  const [sidePanel, setSidePanel] = useState<SidePanel>('explorer');
+  const layout = useLayoutStore((s) => s.layout);
+  const sidePanelTab = useWorkspaceStore((s) => s.sidePanelTab);
+  const setSidePanelTab = useWorkspaceStore((s) => s.setSidePanelTab);
 
   useEffect(() => {
     loadWorkspaces();
@@ -36,6 +33,16 @@ export function App() {
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
     window.aide.terminal.spawn({ cwd: ws?.path }).then((sessionId) => {
       updateTabSession(tabId, sessionId);
+      // Sync to layout store: add tab to the focused pane
+      const tab = useTerminalStore.getState().tabs.find((t) => t.id === tabId);
+      if (tab) {
+        const pane = useLayoutStore.getState().getFocusedPane();
+        if (pane && pane.tabs.length === 0) {
+          useLayoutStore.getState().addTabToPane(pane.id, { ...tab, sessionId });
+        } else {
+          useLayoutStore.getState().resetLayout([{ ...tab, sessionId }]);
+        }
+      }
     }).catch(() => {
       // ignore spawn errors
     });
@@ -55,7 +62,7 @@ export function App() {
         return;
       }
 
-      // ⌘T / Ctrl+T: new shell tab
+      // ⌘T / Ctrl+T: new shell tab in focused pane
       if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         e.stopPropagation();
@@ -65,37 +72,61 @@ export function App() {
         const tabId = useTerminalStore.getState().createDefaultTab();
         window.aide.terminal.spawn({ cwd: ws?.path }).then((sessionId) => {
           useTerminalStore.getState().updateTabSession(tabId, sessionId);
+          const tab = useTerminalStore.getState().tabs.find((t) => t.id === tabId);
+          if (tab) {
+            const pane = useLayoutStore.getState().getFocusedPane();
+            if (pane) {
+              useLayoutStore.getState().addTabToPane(pane.id, { ...tab, sessionId });
+            }
+          }
         }).catch(() => {
           // ignore spawn errors
         });
         return;
       }
 
-      // ⌘W / Ctrl+W: close current tab (ignore if only one tab)
+      // ⌘W / Ctrl+W: close current tab from focused pane
       if (e.key === 'w' || e.key === 'W') {
-        const { tabs: currentTabs, activeTabId: currentActiveTabId } = useTerminalStore.getState();
-        if (currentTabs.length <= 1) return;
+        const pane = useLayoutStore.getState().getFocusedPane();
+        if (!pane || !pane.activeTabId) return;
+        const allPanes = useLayoutStore.getState().getAllPanes();
+        const totalTabs = allPanes.reduce((sum, p) => sum + p.tabs.length, 0);
+        if (totalTabs <= 1) return;
         e.preventDefault();
         e.stopPropagation();
-        const activeTab = currentTabs.find((t) => t.id === currentActiveTabId);
-        if (activeTab?.sessionId) {
+        const activeTab = pane.tabs.find((t) => t.id === pane.activeTabId);
+        if (activeTab?.sessionId && activeTab.type !== 'plugin') {
           window.aide.terminal.kill(activeTab.sessionId).catch(() => {
             // ignore kill errors
           });
         }
-        useTerminalStore.getState().removeTab(currentActiveTabId!);
+        useLayoutStore.getState().removeTabFromPane(pane.id, pane.activeTabId);
+        useTerminalStore.getState().removeTab(pane.activeTabId);
         return;
       }
 
-      // ⌘1-9 / Ctrl+1-9: switch to tab by number
-      const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= 9) {
-        const { tabs: currentTabs } = useTerminalStore.getState();
-        const target = currentTabs[digit - 1];
-        if (target) {
+      // ⌘\ / Ctrl+\: split pane right
+      if (e.key === '\\') {
+        const pane = useLayoutStore.getState().getFocusedPane();
+        if (pane) {
           e.preventDefault();
           e.stopPropagation();
-          useTerminalStore.getState().setActiveTab(target.id);
+          useLayoutStore.getState().splitPane(pane.id, e.shiftKey ? 'vertical' : 'horizontal');
+        }
+        return;
+      }
+
+      // ⌘1-9 / Ctrl+1-9: switch to tab by number in focused pane
+      const digit = parseInt(e.key, 10);
+      if (digit >= 1 && digit <= 9) {
+        const pane = useLayoutStore.getState().getFocusedPane();
+        if (pane) {
+          const target = pane.tabs[digit - 1];
+          if (target) {
+            e.preventDefault();
+            e.stopPropagation();
+            useLayoutStore.getState().setActiveTab(pane.id, target.id);
+          }
         }
       }
     };
@@ -108,85 +139,49 @@ export function App() {
     return <WelcomePage recentProjects={recentProjects} />;
   }
 
-  // Collect all terminals: active workspace tabs + all cached workspace tabs
-  // This keeps xterm instances alive across workspace switches
-  const allTerminals: Array<{ tab: { id: string; sessionId: string }; wsId: string; isActiveWs: boolean }> = [];
-
-  // Current workspace tabs
-  for (const tab of tabs) {
-    if (tab.sessionId) {
-      allTerminals.push({ tab, wsId: activeWorkspaceId, isActiveWs: true });
-    }
-  }
-
-  // Cached workspace tabs (inactive workspaces)
-  for (const [wsId, saved] of Object.entries(workspaceTabs)) {
-    if (wsId === activeWorkspaceId) continue;
-    for (const tab of saved.tabs) {
-      if (tab.sessionId) {
-        allTerminals.push({ tab, wsId, isActiveWs: false });
-      }
-    }
-  }
-
   return (
     <div className="flex flex-col h-screen bg-aide-background text-aide-text-primary overflow-hidden">
       <TitleBar />
 
-      {/* Body: WorkspaceNav + FileExplorer + MainArea */}
+      {/* Body: WorkspaceNav + SidePanel + MainArea */}
       <div className="flex flex-1 overflow-hidden">
         <WorkspaceNav />
 
-        {/* Side Panel */}
+        {/* Side Panel (220px) */}
         <div
           className="flex flex-col shrink-0 bg-aide-surface-sidebar border-r border-aide-border overflow-hidden"
           style={{ width: '220px' }}
         >
           {/* Panel tab switcher */}
-          <div className="flex shrink-0 border-b border-aide-border">
-            {(['explorer', 'plugins', 'github'] as SidePanel[]).map((panel) => (
+          <div className="flex shrink-0 border-b border-aide-border" style={{ height: '32px' }}>
+            {(['files', 'plugins'] as const).map((tab) => (
               <button
-                key={panel}
-                onClick={() => setSidePanel(panel)}
-                className={`flex-1 py-1 text-[9px] uppercase tracking-widest font-mono transition-colors ${
-                  sidePanel === panel
-                    ? 'text-aide-text-primary border-b border-aide-accent'
+                key={tab}
+                onClick={() => setSidePanelTab(tab)}
+                className={`flex-1 flex items-center justify-center text-[10px] uppercase tracking-widest font-semibold transition-colors ${
+                  sidePanelTab === tab
+                    ? 'text-aide-text-primary border-b-2 border-aide-accent'
                     : 'text-aide-text-tertiary hover:text-aide-text-secondary'
                 }`}
               >
-                {panel === 'explorer' ? 'Files' : panel === 'plugins' ? 'Plugins' : 'GitHub'}
+                {tab === 'files' ? 'FILES' : 'PLUGINS'}
               </button>
             ))}
           </div>
 
           {/* Panel content */}
           <div className="flex flex-col flex-1 overflow-hidden relative">
-            {sidePanel === 'explorer' && activeWorkspaceId && (() => {
+            {sidePanelTab === 'files' && activeWorkspaceId && (() => {
               const ws = workspaces.find((w) => w.id === activeWorkspaceId);
               return ws ? <FileExplorer cwd={ws.path} /> : null;
             })()}
-            {sidePanel === 'plugins' && <PluginPanel />}
-            {sidePanel === 'github' && <GitHubPanel />}
+            {sidePanelTab === 'plugins' && <PluginPanel />}
           </div>
         </div>
 
-        {/* Main area: TabBar + Terminal */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <TabBar />
-          <div className="flex-1 overflow-hidden relative">
-            {allTerminals.map(({ tab, isActiveWs }) => {
-              const isVisible = isActiveWs && tab.id === activeTabId;
-              return (
-                <div
-                  key={tab.id}
-                  className="absolute inset-0"
-                  style={{ display: isVisible ? 'block' : 'none' }}
-                >
-                  <TerminalPanel sessionId={tab.sessionId} visible={isVisible} />
-                </div>
-              );
-            })}
-          </div>
+        {/* Main area: SplitContainer */}
+        <div className="flex flex-1 overflow-hidden">
+          <SplitContainer node={layout} />
         </div>
       </div>
 

@@ -259,6 +259,22 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 - IPC: `readTree(cwd)`, `readFile(path)`, `writeFile(path, content)`, `delete(path)`, `onChanged(callback)`
 - 워크스페이스 경로를 `cwd` prop으로 전달받음
 
+### 3.6.5 Side Panel Tab Bar
+
+사이드 패널(220px) 상단에 위치한 탭 바로 Files와 Plugins 뷰를 전환.
+
+| Element | Spec | 동작 |
+|---------|------|------|
+| Tab Bar | 높이 32px, `surface` 배경, 하단 border 1px | 탭 컨테이너 |
+| Files Tab | 텍스트 `FILES` (10px, uppercase) | 클릭 → File Explorer 표시 |
+| Plugins Tab | 텍스트 `PLUGINS` (10px, uppercase) | 클릭 → Plugin Panel 표시 |
+| Active Indicator | accent 색상 하단 보더 2px | 현재 활성 탭 표시 |
+| Inactive Text | `text-tertiary` | 비활성 탭 |
+| Active Text | `text-primary` | 활성 탭 |
+
+- 기본 활성 탭: Files
+- 탭 전환 시 사이드 패널 콘텐츠 즉시 교체 (애니메이션 없음)
+
 ### 3.7 TabBar (36px)
 
 | Element | Spec | 동작 |
@@ -290,6 +306,31 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 
 **비활성 에이전트**: 시스템에 미설치된 에이전트는 항목을 비활성(disabled) 처리하고 `Not installed` 힌트 표시.
 
+### 3.7.5 Plugin Panel (Side Panel — Plugins Tab)
+
+Plugins 탭 선택 시 사이드 패널에 표시되는 플러그인 관리 UI.
+
+#### 생성 폼 (Generate Plugin)
+
+| Element | Spec | 동작 |
+|---------|------|------|
+| Section Header | `GENERATE` (10px, uppercase, tertiary, 600 weight) | 섹션 제목 |
+| Name Input | 텍스트 입력 (12px, surface 배경, border, cornerRadius 4, 패딩 8px) | 플러그인 이름 |
+| Description Input | 멀티라인 입력 (12px, surface 배경, 3줄 높이) | 플러그인 설명 (자연어) |
+| Generate Button | `Generate Plugin` (12px, accent 배경, white 텍스트, cornerRadius 6, 높이 32px) | 클릭 → 플러그인 생성 파이프라인 실행 |
+| Loading State | 버튼 → `Generating...` + 스피너 | 생성 중 비활성화 |
+
+#### 플러그인 리스트 (Installed Plugins)
+
+| Element | Spec | 동작 |
+|---------|------|------|
+| Section Header | `PLUGINS` (10px, uppercase, tertiary, 600 weight) | 섹션 제목 |
+| Plugin Item | 높이 36px, padding [0,12], gap 8 | 개별 플러그인 행 |
+| Plugin Name | 13px, text-primary | 플러그인 식별 |
+| Toggle Switch | 32×18px, cornerRadius 9 | ON: accent 배경 / OFF: surface 배경, border |
+| Delete Button | `×` (tertiary, 호버 시 표시) | 클릭 → 삭제 확인 후 제거 |
+| Empty State | `No plugins yet` (13px, tertiary, 중앙 정렬) | 플러그인 없을 때 표시 |
+
 ### 3.8 Split-Screen & Drag Interaction
 
 #### 분할 레이아웃
@@ -307,6 +348,19 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 각 pane 헤더(28px):
 - 에이전트 dot (8px) + 세션명 — 터미널 탭
 - `◈` 아이콘 + 플러그인명 + accent 하단 보더(2px) — 플러그인 탭
+
+#### Pane Header 상세 스펙 (28px)
+
+각 분할 창 상단에 표시되는 세션 정보 헤더. 단일 창(1×1)에서는 표시하지 않음.
+
+| Element | Spec | 동작 |
+|---------|------|------|
+| Container | 높이 28px, `surface` 배경, padding [0,12], gap 8, 하단 border 1px | 세션 헤더 |
+| Agent Dot | 8px 원, 에이전트 컬러 (Claude amber, Gemini blue, Codex green, Shell tertiary) | 세션 타입 표시 |
+| Session Name | 11px JetBrains Mono, `text-secondary` | `claude — auth module` 형식 |
+| Plugin Icon | `◈` (12px, accent) — 플러그인 탭일 경우 dot 대신 표시 | 플러그인 구분 |
+| Plugin Bottom Border | accent 2px 하단 보더 — 플러그인 탭일 경우 | 플러그인 시각적 강조 |
+| Close Button | `×` (12px, tertiary, 호버 시 visible) | 클릭 → 현재 탭 닫기 |
 
 #### 드래그 상태 (Drag States)
 
@@ -336,12 +390,54 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 | 핸들 아이콘 | 방향 화살표 | 세로 구분선: `↔`, 가로 구분선: `↕`, 16px Inter, `#3B82F6` |
 | 툴팁 | 안내 텍스트 | `"Drag to resize pane"`, 11px Inter, `fill: #1E293B`, `cornerRadius: 4`, 핸들 근처 절대 위치 |
 
+#### 분할 화면 생성 및 관리
+
+**분할 생성 방법**:
+
+| 트리거 | 동작 | 결과 |
+|--------|------|------|
+| 탭 우클릭 → "Split Right" | 현재 창 오른쪽에 새 창 생성, 선택 탭 이동 | 수평 분할 |
+| 탭 우클릭 → "Split Down" | 현재 창 아래에 새 창 생성, 선택 탭 이동 | 수직 분할 |
+| `⌘\` | 현재 포커스된 창을 수평 분할 | 수평 분할 |
+| `⌘⇧\` | 현재 포커스된 창을 수직 분할 | 수직 분할 |
+| 탭 드래그 → 다른 창 드롭 | 탭이 대상 창으로 이동 | 기존 분할 유지 |
+
+**창 닫기 동작**:
+- 창 내 마지막 탭 닫기 → 해당 창 자동 제거, 나머지 창이 빈 공간 차지
+- 최소 1개 창은 항상 유지 (전체 창 제거 불가 → Empty State 표시)
+
+**새 탭 생성 위치**:
+- `+` 버튼 또는 `⌘T` → 현재 **포커스된 창**에 새 탭 추가
+- 포커스 표시: 활성 창의 TabBar에 accent 하단 보더 1px
+
+**창 포커스 전환**:
+- 창 내부 클릭 → 해당 창 포커스
+- `⌘⇧[` / `⌘⇧]` → 이전/다음 창으로 포커스 이동
+
 #### 플러그인 탭 식별자
 
 | 구분 | 탭 접두사 | 활성 탭 상단 보더 |
 |------|-----------|------------------|
 | 에이전트/셸 탭 | `●` (에이전트 컬러 dot) | accent 2px |
 | 플러그인 탭 | `◈` (accent 색상) | accent 2px |
+
+#### 플러그인 탭 동작 (Plugin-as-Tab)
+
+**플러그인 탭 생성 흐름**:
+1. 사이드 패널에서 `Generate Plugin` 실행 → 생성 완료
+2. 확인 다이얼로그: "Open [plugin-name] in a new pane?" (Yes / No)
+3. Yes → 현재 창 옆에 수평 분할 + 플러그인 탭 자동 생성
+4. No → 사이드 패널 Plugins 탭에서만 관리
+
+**플러그인 탭 렌더링**:
+- 플러그인 UI는 sandboxed iframe 내에서 렌더링
+- iframe 소스: 플러그인 디렉토리의 `index.html` (플러그인이 UI를 제공하는 경우)
+- UI 미제공 플러그인: "This plugin runs in the background" 메시지 + 활성화 상태 표시
+
+**플러그인 탭 식별**:
+- TabBar 탭: `◈ plugin-name` (accent 색상 아이콘, text-primary 이름)
+- Pane Header: `◈ plugin-name` + accent 하단 보더 2px
+- 터미널 탭과 구분: 터미널은 `● session-name`, 플러그인은 `◈ plugin-name`
 
 ### 3.10 Terminal Area
 
