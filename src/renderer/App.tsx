@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { TitleBar } from './components/layout/TitleBar';
 import { StatusBar } from './components/layout/StatusBar';
 import { SplitContainer } from './components/layout/SplitContainer';
+import { DndProvider } from './components/layout/DndProvider';
 import { WorkspaceNav } from './components/workspace/WorkspaceNav';
 import { WelcomePage } from './components/welcome/WelcomePage';
 import { FileExplorer } from './components/file-explorer/FileExplorer';
@@ -179,9 +180,11 @@ export function App() {
           </div>
         </div>
 
-        {/* Main area: SplitContainer */}
+        {/* Main area: SplitContainer with DnD */}
         <div className="flex flex-1 overflow-hidden">
-          <SplitContainer node={layout} />
+          <DndProvider>
+            <SplitContainer node={layout} />
+          </DndProvider>
         </div>
       </div>
 
