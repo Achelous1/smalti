@@ -96,3 +96,6 @@ out/
 # Test
 test-results/
 playwright-report/
+
+# claude-mem auto-generated context files
+CLAUDE.md
