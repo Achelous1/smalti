@@ -260,18 +260,17 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
       <div ref={setDropRefs} className="flex-1 overflow-hidden relative">
         {isOver && dropEdge && (
           <div
-            className="absolute z-30 flex items-center justify-center pointer-events-none"
+            className="absolute z-30 flex items-center justify-center pointer-events-none rounded-sm"
             style={{
-              backgroundColor: '#3B82F633',
-              border: '2px solid #3B82F6',
-              ...(dropEdge === 'left' ? { top: 0, left: 0, bottom: 0, width: '50%' } :
-                 dropEdge === 'right' ? { top: 0, right: 0, bottom: 0, width: '50%' } :
-                 dropEdge === 'top' ? { top: 0, left: 0, right: 0, height: '50%' } :
-                 dropEdge === 'bottom' ? { bottom: 0, left: 0, right: 0, height: '50%' } :
-                 { top: 0, left: 0, right: 0, bottom: 0 }),
+              backgroundColor: dropEdge === 'center' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.08)',
+              ...(dropEdge === 'left' ? { top: 4, left: 4, bottom: 4, width: 'calc(50% - 6px)' } :
+                 dropEdge === 'right' ? { top: 4, right: 4, bottom: 4, width: 'calc(50% - 6px)' } :
+                 dropEdge === 'top' ? { top: 4, left: 4, right: 4, height: 'calc(50% - 6px)' } :
+                 dropEdge === 'bottom' ? { bottom: 4, left: 4, right: 4, height: 'calc(50% - 6px)' } :
+                 { top: 4, left: 4, right: 4, bottom: 4 }),
             }}
           >
-            <span className="text-white text-[13px] font-mono opacity-80">
+            <span className="text-aide-text-tertiary text-[12px] font-mono">
               {dropEdge === 'center' ? 'Move here' :
                dropEdge === 'left' ? '← Split Left' :
                dropEdge === 'right' ? 'Split Right →' :
