@@ -16,9 +16,6 @@ export function App() {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const recentProjects = useWorkspaceStore((s) => s.recentProjects);
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces);
-  const tabs = useTerminalStore((s) => s.tabs);
-  const createDefaultTab = useTerminalStore((s) => s.createDefaultTab);
-  const updateTabSession = useTerminalStore((s) => s.updateTabSession);
   const layout = useLayoutStore((s) => s.layout);
   const sidePanelTab = useWorkspaceStore((s) => s.sidePanelTab);
   const setSidePanelTab = useWorkspaceStore((s) => s.setSidePanelTab);
@@ -29,25 +26,33 @@ export function App() {
 
   // Auto-create a default shell tab when workspace is first loaded
   useEffect(() => {
-    if (!activeWorkspaceId || tabs.length > 0) return;
-    const tabId = createDefaultTab();
+    if (!activeWorkspaceId) return;
+    // Check layout-store panes for existing tabs (not terminal-store)
+    const panes = useLayoutStore.getState().getAllPanes();
+    const hasTabs = panes.some((p) => p.tabs.length > 0);
+    if (hasTabs) return;
+
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
     window.aide.terminal.spawn({ cwd: ws?.path }).then((sessionId) => {
-      updateTabSession(tabId, sessionId);
-      // Sync to layout store: add tab to the focused pane
-      const tab = useTerminalStore.getState().tabs.find((t) => t.id === tabId);
-      if (tab) {
-        const pane = useLayoutStore.getState().getFocusedPane();
-        if (pane && pane.tabs.length === 0) {
-          useLayoutStore.getState().addTabToPane(pane.id, { ...tab, sessionId });
-        } else {
-          useLayoutStore.getState().resetLayout([{ ...tab, sessionId }]);
-        }
+      const tab = {
+        id: crypto.randomUUID(),
+        type: 'shell' as const,
+        sessionId,
+        title: '$ shell',
+      };
+      // Add to both stores
+      useTerminalStore.getState().addTab(tab);
+      useTerminalStore.getState().setActiveTab(tab.id);
+      const pane = useLayoutStore.getState().getFocusedPane();
+      if (pane) {
+        useLayoutStore.getState().addTabToPane(pane.id, tab);
+      } else {
+        useLayoutStore.getState().resetLayout([tab]);
       }
     }).catch(() => {
       // ignore spawn errors
     });
-  }, [activeWorkspaceId, tabs.length, createDefaultTab, updateTabSession]);
+  }, [activeWorkspaceId]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -70,15 +75,17 @@ export function App() {
         const wsId = useWorkspaceStore.getState().activeWorkspaceId;
         if (!wsId) return;
         const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === wsId);
-        const tabId = useTerminalStore.getState().createDefaultTab();
         window.aide.terminal.spawn({ cwd: ws?.path }).then((sessionId) => {
-          useTerminalStore.getState().updateTabSession(tabId, sessionId);
-          const tab = useTerminalStore.getState().tabs.find((t) => t.id === tabId);
-          if (tab) {
-            const pane = useLayoutStore.getState().getFocusedPane();
-            if (pane) {
-              useLayoutStore.getState().addTabToPane(pane.id, { ...tab, sessionId });
-            }
+          const tab = {
+            id: crypto.randomUUID(),
+            type: 'shell' as const,
+            sessionId,
+            title: '$ shell',
+          };
+          useTerminalStore.getState().addTab(tab);
+          const pane = useLayoutStore.getState().getFocusedPane();
+          if (pane) {
+            useLayoutStore.getState().addTabToPane(pane.id, tab);
           }
         }).catch(() => {
           // ignore spawn errors

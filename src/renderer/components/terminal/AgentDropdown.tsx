@@ -55,7 +55,7 @@ interface AgentDropdownProps {
 }
 
 export function AgentDropdown({ paneId, onClose }: AgentDropdownProps) {
-  const { addTab, setActiveTab, toggleDropdown, updateTabSession } = useTerminalStore();
+  const { addTab, setActiveTab, toggleDropdown } = useTerminalStore();
   const { installedAgents, setInstalledAgents } = useAgentStore();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -89,34 +89,33 @@ export function AgentDropdown({ paneId, onClose }: AgentDropdownProps) {
 
   const handleSelect = async (option: AgentOption) => {
     if (!isInstalled(option.id)) return;
-
-    const tabId = crypto.randomUUID();
-    const tab = {
-      id: tabId,
-      type: option.type as 'agent' | 'shell',
-      agentId: option.type === 'agent' ? option.id : undefined,
-      sessionId: '',
-      title: option.label,
-    };
-    addTab(tab);
-    setActiveTab(tabId);
+    close();
 
     try {
       const ws = workspaces.find((w) => w.id === activeWorkspaceId);
       const sessionId = await window.aide.terminal.spawn(
         option.command ? { shell: option.command, cwd: ws?.path } : { cwd: ws?.path }
       );
-      updateTabSession(tabId, sessionId);
 
-      // Add to layout-store pane
+      const tab = {
+        id: crypto.randomUUID(),
+        type: option.type as 'agent' | 'shell',
+        agentId: option.type === 'agent' ? option.id : undefined,
+        sessionId,
+        title: option.label,
+      };
+
+      // Add to both stores with real sessionId
+      addTab(tab);
+      setActiveTab(tab.id);
+
       const targetPaneId = paneId ?? useLayoutStore.getState().getFocusedPane()?.id;
       if (targetPaneId) {
-        useLayoutStore.getState().addTabToPane(targetPaneId, { ...tab, sessionId });
+        useLayoutStore.getState().addTabToPane(targetPaneId, tab);
       }
     } catch {
       // ignore spawn errors
     }
-    close();
   };
 
   return (
