@@ -110,14 +110,17 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
 
   // Auto-spawn a shell when pane has no tabs
   useEffect(() => {
+    console.log('[PaneView] auto-spawn check', { paneId: pane.id, tabCount: pane.tabs.length, autoSpawned: autoSpawnedRef.current });
     if (pane.tabs.length > 0 || autoSpawnedRef.current) return;
     autoSpawnedRef.current = true;
 
     const wsId = useWorkspaceStore.getState().activeWorkspaceId;
-    if (!wsId) return;
+    if (!wsId) { console.log('[PaneView] no activeWorkspaceId, skip spawn'); return; }
     const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === wsId);
+    console.log('[PaneView] spawning shell', { wsId, cwd: ws?.path });
 
     window.aide.terminal.spawn({ cwd: ws?.path }).then((sessionId) => {
+      console.log('[PaneView] spawn success', { sessionId });
       const tab: TerminalTab = {
         id: crypto.randomUUID(),
         type: 'shell',

@@ -73,6 +73,7 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
 
   // Initialize xterm + connect to pty session (deferred by one frame for layout)
   useEffect(() => {
+    console.log('[TerminalPanel] init effect', { sessionId, hasContainer: !!containerRef.current });
     if (!containerRef.current || !sessionId) return;
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
@@ -98,6 +99,8 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
 
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
+
+      console.log('[TerminalPanel] xterm opened', { sessionId: sessionIdRef.current, cols: terminal.cols, rows: terminal.rows, containerW: containerRef.current?.offsetWidth, containerH: containerRef.current?.offsetHeight });
 
       // Connect pty input/output immediately after xterm is ready
       inputDisposable = terminal.onData((data) => {
