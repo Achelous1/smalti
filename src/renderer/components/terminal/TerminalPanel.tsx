@@ -71,11 +71,13 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Initialize xterm once (deferred by one frame so container has layout dimensions)
+  // Initialize xterm + connect to pty session (deferred by one frame for layout)
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !sessionId) return;
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
+    let inputDisposable: { dispose: () => void } | null = null;
+    let unsubscribe: (() => void) | null = null;
 
     const raf = requestAnimationFrame(() => {
       if (cancelled || !containerRef.current) return;
@@ -97,6 +99,19 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
 
+      // Connect pty input/output immediately after xterm is ready
+      inputDisposable = terminal.onData((data) => {
+        window.aide.terminal.write(sessionIdRef.current, data);
+      });
+      unsubscribe = window.aide.terminal.onData((incomingSessionId, data) => {
+        if (incomingSessionId === sessionIdRef.current) {
+          terminal.write(data);
+        }
+      });
+
+      // Resize pty to match terminal dimensions
+      window.aide.terminal.resize(sessionIdRef.current, terminal.cols, terminal.rows);
+
       resizeObserver = new ResizeObserver((entries) => {
         const entry = entries[0];
         if (!entry || !fitAddonRef.current || !terminalRef.current) return;
@@ -115,13 +130,15 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
       cancelled = true;
       cancelAnimationFrame(raf);
       resizeObserver?.disconnect();
+      inputDisposable?.dispose();
+      unsubscribe?.();
       if (terminalRef.current) {
         terminalRef.current.dispose();
         terminalRef.current = null;
         fitAddonRef.current = null;
       }
     };
-  }, []);
+  }, [sessionId]);
 
   // Update terminal theme when app theme changes
   useEffect(() => {
@@ -141,36 +158,6 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
     }, 50);
     return () => clearTimeout(timer);
   }, [visible]);
-
-  // Connect to sessionId — re-runs when sessionId changes
-  useEffect(() => {
-    if (!sessionId || !terminalRef.current) return;
-
-    const terminal = terminalRef.current;
-
-    // Send user input to this session's pty
-    const inputDisposable = terminal.onData((data) => {
-      window.aide.terminal.write(sessionId, data);
-    });
-
-    // Receive output from this session's pty
-    const unsubscribe = window.aide.terminal.onData((incomingSessionId, data) => {
-      if (incomingSessionId === sessionId) {
-        terminal.write(data);
-      }
-    });
-
-    // Resize pty to match terminal dimensions
-    if (fitAddonRef.current) {
-      fitAddonRef.current.fit();
-      window.aide.terminal.resize(sessionId, terminal.cols, terminal.rows);
-    }
-
-    return () => {
-      inputDisposable.dispose();
-      unsubscribe();
-    };
-  }, [sessionId]);
 
   return (
     <div
