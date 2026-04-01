@@ -271,8 +271,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   splitPaneWithTab: (targetPaneId, direction, position, tab, fromPaneId) => {
+    console.log('[layout-store] splitPaneWithTab', { targetPaneId, direction, position, tabId: tab.id, fromPaneId });
     set((state) => {
       const totalPanes = collectPanes(state.layout).length;
+      console.log('[layout-store] splitPaneWithTab checks', { totalPanes, visCols: countVisualColumns(state.layout), visRows: countVisualRows(state.layout) });
       if (totalPanes >= 6) return state;
       if (direction === 'horizontal' && countVisualColumns(state.layout) >= 3) return state;
       if (direction === 'vertical' && countVisualRows(state.layout) >= 2) return state;

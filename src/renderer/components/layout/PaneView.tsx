@@ -257,7 +257,7 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
       )}
 
       {/* Content area — also a drop zone */}
-      <div ref={setDropRefs} className="flex-1 overflow-hidden relative">
+      <div ref={setDropRefs} data-pane-drop={pane.id} className="flex-1 overflow-hidden relative">
         {isOver && dropEdge && (
           <div
             className="absolute z-30 flex items-center justify-center pointer-events-none rounded-sm"

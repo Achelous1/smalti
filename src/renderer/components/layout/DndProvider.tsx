@@ -45,15 +45,17 @@ export function DndProvider({ children }: DndProviderProps) {
 
     const sourcePaneId = sourceData.paneId as string;
 
-    // Dropped on a pane drop zone (cross-pane move or split)
-    if (overData?.paneId && overData.paneId !== sourcePaneId) {
+    // Dropped on a pane drop zone (cross-pane move, split, or same-pane edge split)
+    if (overData?.paneId) {
       const targetPaneId = overData.paneId as string;
       const tab = sourceData.tab as TerminalTab;
+      const isSamePane = targetPaneId === sourcePaneId;
 
-      // Calculate edge from drop coordinates (not stale droppable data)
+      // Calculate edge from drop coordinates via DOM
       let dropEdge: 'left' | 'right' | 'top' | 'bottom' | 'center' = 'center';
-      if (over.rect) {
-        const rect = over.rect;
+      const droppableEl = document.querySelector(`[data-pane-drop="${targetPaneId}"]`);
+      const rect = droppableEl?.getBoundingClientRect();
+      if (rect) {
         const mouseX = (event.activatorEvent as MouseEvent).clientX + (event.delta?.x ?? 0);
         const mouseY = (event.activatorEvent as MouseEvent).clientY + (event.delta?.y ?? 0);
         const relX = (mouseX - rect.left) / rect.width;
@@ -66,25 +68,26 @@ export function DndProvider({ children }: DndProviderProps) {
       }
 
       if (dropEdge !== 'center' && tab) {
-        // Edge drop → split pane
+        // Edge drop → split pane (works for both same-pane and cross-pane)
         const direction = (dropEdge === 'left' || dropEdge === 'right') ? 'horizontal' : 'vertical';
         const position = (dropEdge === 'left' || dropEdge === 'top') ? 'before' : 'after';
         useLayoutStore.getState().splitPaneWithTab(targetPaneId, direction, position, tab, sourcePaneId);
-      } else {
-        // Center drop → move tab to existing pane
+      } else if (!isSamePane) {
+        // Center drop on different pane → move tab
         useLayoutStore.getState().moveTab(sourcePaneId, targetPaneId, active.id as string);
       }
       return;
     }
 
-    // Dropped on a tab in the same pane (reorder)
-    if (overData?.paneId === sourcePaneId && active.id !== over.id) {
-      const pane = useLayoutStore.getState().getAllPanes().find((p) => p.id === sourcePaneId);
+    // Dropped on a tab in the same pane (reorder via sortable)
+    if (sourceData?.paneId && active.id !== over.id) {
+      const paneId = sourceData.paneId as string;
+      const pane = useLayoutStore.getState().getAllPanes().find((p) => p.id === paneId);
       if (pane) {
         const oldIndex = pane.tabs.findIndex((t) => t.id === active.id);
         const newIndex = pane.tabs.findIndex((t) => t.id === over.id);
         if (oldIndex >= 0 && newIndex >= 0) {
-          useLayoutStore.getState().reorderTab(sourcePaneId, oldIndex, newIndex);
+          useLayoutStore.getState().reorderTab(paneId, oldIndex, newIndex);
         }
       }
     }
