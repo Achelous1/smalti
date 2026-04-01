@@ -46,6 +46,26 @@ function findParentSplit(
   return null;
 }
 
+/** Count the maximum visual columns (horizontal leaves) across all rows */
+function countVisualColumns(node: LayoutNode): number {
+  if (!isSplitLayout(node)) return 1;
+  if (node.direction === 'horizontal') {
+    // Horizontal split: sum all children's column counts
+    return node.children.reduce((sum, child) => sum + countVisualColumns(child), 0);
+  }
+  // Vertical split: take max columns across rows
+  return Math.max(...node.children.map(countVisualColumns));
+}
+
+/** Count the maximum visual rows (vertical leaves) across all columns */
+function countVisualRows(node: LayoutNode): number {
+  if (!isSplitLayout(node)) return 1;
+  if (node.direction === 'vertical') {
+    return node.children.reduce((sum, child) => sum + countVisualRows(child), 0);
+  }
+  return Math.max(...node.children.map(countVisualRows));
+}
+
 /** Deep-clone a layout node (plain JSON, no cycles) */
 function cloneNode<T extends LayoutNode>(node: T): T {
   return JSON.parse(JSON.stringify(node));
@@ -135,6 +155,11 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       // Hard limit: max 6 panes total (3×2 grid)
       const totalPanes = collectPanes(state.layout).length;
       if (totalPanes >= 6) return state;
+
+      // Visual grid limit: max 3 columns, max 2 rows
+      // Check what the tree would look like AFTER splitting
+      if (direction === 'horizontal' && countVisualColumns(state.layout) >= 3) return state;
+      if (direction === 'vertical' && countVisualRows(state.layout) >= 2) return state;
 
       const layout = cloneNode(state.layout);
       const pane = findPane(layout, paneId);
