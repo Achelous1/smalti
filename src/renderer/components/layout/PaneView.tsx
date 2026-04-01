@@ -216,7 +216,7 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
               tab={tab}
               paneId={pane.id}
               isActive={tab.id === pane.activeTabId}
-              canClose={pane.tabs.length > 1}
+              canClose={pane.tabs.length > 1 || showHeader}
               onActivate={() => setActiveTab(pane.id, tab.id)}
               onClose={(e) => handleCloseTab(tab, e)}
               onContextMenu={(e) => handleContextMenu(e, tab.id)}
