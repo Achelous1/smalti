@@ -46,16 +46,6 @@ function findParentSplit(
   return null;
 }
 
-/** Count max children in any split of a given direction */
-function maxChildrenInDirection(node: LayoutNode, dir: 'horizontal' | 'vertical'): number {
-  if (!isSplitLayout(node)) return 1;
-  let max = node.direction === dir ? node.children.length : 1;
-  for (const child of node.children) {
-    max = Math.max(max, maxChildrenInDirection(child, dir));
-  }
-  return max;
-}
-
 /** Deep-clone a layout node (plain JSON, no cycles) */
 function cloneNode<T extends LayoutNode>(node: T): T {
   return JSON.parse(JSON.stringify(node));
@@ -142,11 +132,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   splitPane: (paneId, direction) => {
     set((state) => {
-      // Enforce max 3 horizontal, max 2 vertical (3×2 grid limit)
-      const maxH = maxChildrenInDirection(state.layout, 'horizontal');
-      const maxV = maxChildrenInDirection(state.layout, 'vertical');
-      if (direction === 'horizontal' && maxH >= 3) return state;
-      if (direction === 'vertical' && maxV >= 2) return state;
+      // Hard limit: max 6 panes total (3×2 grid)
+      const totalPanes = collectPanes(state.layout).length;
+      if (totalPanes >= 6) return state;
 
       const layout = cloneNode(state.layout);
       const pane = findPane(layout, paneId);
@@ -154,7 +142,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
       const newPane = createPane();
 
-      // If the active tab exists, move it to the new pane
+      // Move active tab to new pane if there are multiple tabs
       if (pane.activeTabId && pane.tabs.length > 1) {
         const tabIndex = pane.tabs.findIndex((t) => t.id === pane.activeTabId);
         if (tabIndex >= 0) {
@@ -165,6 +153,23 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         }
       }
 
+      // Check if parent split has the same direction → flatten (add sibling)
+      const parentInfo = findParentSplit(layout, paneId);
+      if (parentInfo && parentInfo.parent.direction === direction) {
+        // Parent limit: max 3 for horizontal, max 2 for vertical
+        const maxChildren = direction === 'horizontal' ? 3 : 2;
+        if (parentInfo.parent.children.length >= maxChildren) return state;
+
+        // Insert new pane right after the current pane
+        parentInfo.parent.children.splice(parentInfo.index + 1, 0, newPane);
+        // Redistribute sizes evenly
+        const count = parentInfo.parent.children.length;
+        parentInfo.parent.sizes = Array(count).fill(100 / count);
+
+        return { layout, focusedPaneId: newPane.id };
+      }
+
+      // Different direction or root pane → wrap in new split
       const newSplit: SplitLayout = {
         id: newSplitId(),
         direction,
@@ -172,12 +177,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         sizes: [50, 50],
       };
 
-      // Replace pane with split in tree
       if (layout.id === paneId) {
         return { layout: newSplit, focusedPaneId: newPane.id };
       }
 
-      const parentInfo = findParentSplit(layout, paneId);
       if (parentInfo) {
         parentInfo.parent.children[parentInfo.index] = newSplit;
       }
