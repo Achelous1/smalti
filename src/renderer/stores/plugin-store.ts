@@ -11,7 +11,7 @@ interface PluginState {
   activate: (id: string) => Promise<void>;
   deactivate: (id: string) => Promise<void>;
   deletePlugin: (name: string) => Promise<void>;
-  generate: (name: string, description: string) => Promise<void>;
+  generate: (name: string, description: string) => Promise<{ id: string } | null>;
 }
 
 export const usePluginStore = create<PluginState>((set, get) => ({
@@ -57,15 +57,17 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   generate: async (name: string, description: string) => {
     set({ generating: true, generateError: null });
     try {
-      await window.aide.plugin.generateSpec(name, description);
+      const spec = await window.aide.plugin.generateSpec(name, description);
       // Reload the plugin list after generation
       const plugins = await window.aide.plugin.list();
       set({ plugins, generating: false });
+      return { id: spec.id };
     } catch (e) {
       set({
         generating: false,
         generateError: e instanceof Error ? e.message : 'Failed to generate plugin',
       });
+      return null;
     }
   },
 }));

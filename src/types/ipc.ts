@@ -62,10 +62,34 @@ export interface GitStatus {
 
 export interface TerminalTab {
   id: string;
-  type: 'agent' | 'shell';
+  type: 'agent' | 'shell' | 'plugin';
   agentId?: string;
+  pluginId?: string;
   sessionId: string;
   title: string;
+}
+
+/** Split-screen pane */
+export interface Pane {
+  id: string;
+  tabs: TerminalTab[];
+  activeTabId: string | null;
+}
+
+/** Recursive split layout node */
+export interface SplitLayout {
+  id: string;
+  direction: 'horizontal' | 'vertical';
+  children: LayoutNode[];
+  sizes: number[];
+}
+
+/** A layout node is either a leaf Pane or a nested SplitLayout */
+export type LayoutNode = Pane | SplitLayout;
+
+/** Type guard: check if a LayoutNode is a SplitLayout */
+export function isSplitLayout(node: LayoutNode): node is SplitLayout {
+  return 'direction' in node && 'children' in node;
 }
 
 /** GitHub PR summary */

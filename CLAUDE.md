@@ -93,6 +93,33 @@ plugins/              # Generated plugins stored here
   2. [Step] → verify: [check]
   ```
 
+## Known Pitfalls (Lessons Learned)
+
+### Zustand: Never return new objects/arrays from selectors
+`useStore((s) => s.getAllPanes())` creates a new array every render → React's `useSyncExternalStore` detects a "change" → infinite re-render loop. **Always select primitives or stable references.** Compute derived data outside the selector:
+```ts
+// BAD: infinite loop
+const panes = useLayoutStore((s) => s.getAllPanes());
+// GOOD: select stable value, compute in component
+const layout = useLayoutStore((s) => s.layout);
+const paneCount = countPanes(layout);
+```
+
+### xterm.js: Defer open() until container has dimensions
+`terminal.open(container)` crashes with "Cannot read properties of undefined (reading 'dimensions')" if the container has zero size (e.g., `display: none` or flex not yet resolved). **Wrap in `requestAnimationFrame`** to ensure layout is computed.
+
+### xterm.js + pty: Connect in the same callback as open()
+If xterm init is deferred (RAF) but pty connection is a separate `useEffect([sessionId])`, the connection effect fires first when `terminalRef.current` is still null → silently fails, never re-fires. **Always connect pty input/output inside the same RAF callback** that calls `terminal.open()`.
+
+### Terminal tabs: Spawn pty BEFORE creating the tab
+Creating a tab with `sessionId: ''` then updating it async causes the UI to render a tab with no terminal (PaneView skips `<TerminalPanel>` when `sessionId` is falsy). **Call `window.aide.terminal.spawn()` first, get the real sessionId, then create the tab with it.**
+
+### Split pane limits: Count visual grid, not per-node children
+Checking `node.children.length >= 3` only prevents direct siblings but allows nested splits to bypass the limit (e.g., a vertical split inside a horizontal split can add more horizontal panes). **Count visual columns/rows across the entire tree recursively.** For horizontal: sum children columns in horizontal splits, take max in vertical splits.
+
+### Auto-spawn: Let PaneView own its lifecycle
+Moving auto-spawn from `App.tsx useEffect` to `PaneView` eliminates timing issues where layout-store state wasn't ready when App's effect fired. The component that renders the terminal should be responsible for ensuring it has content.
+
 ## Platform Notes
 
 - macOS: bash/zsh default shell, .dmg/.zip packaging

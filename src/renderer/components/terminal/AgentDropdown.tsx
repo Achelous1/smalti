@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useTerminalStore } from '../../stores/terminal-store';
 import { useAgentStore } from '../../stores/agent-store';
 import { useWorkspaceStore } from '../../stores/workspace-store';
+import { useLayoutStore } from '../../stores/layout-store';
 
 interface AgentOption {
   id: string;
@@ -48,8 +49,13 @@ const AGENT_OPTIONS: AgentOption[] = [
   },
 ];
 
-export function AgentDropdown() {
-  const { addTab, setActiveTab, toggleDropdown, updateTabSession } = useTerminalStore();
+interface AgentDropdownProps {
+  paneId?: string;
+  onClose?: () => void;
+}
+
+export function AgentDropdown({ paneId, onClose }: AgentDropdownProps) {
+  const { addTab, setActiveTab, toggleDropdown } = useTerminalStore();
   const { installedAgents, setInstalledAgents } = useAgentStore();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -60,16 +66,21 @@ export function AgentDropdown() {
     window.aide.agent.detect().then(setInstalledAgents).catch(() => {});
   }, [setInstalledAgents]);
 
+  const close = () => {
+    if (onClose) onClose();
+    else toggleDropdown();
+  };
+
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        toggleDropdown();
+        close();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [toggleDropdown]);
+  }, []);
 
   const isInstalled = (agentId: string) => {
     if (agentId === 'shell') return true;
@@ -78,27 +89,33 @@ export function AgentDropdown() {
 
   const handleSelect = async (option: AgentOption) => {
     if (!isInstalled(option.id)) return;
-
-    const tabId = crypto.randomUUID();
-    addTab({
-      id: tabId,
-      type: option.type,
-      agentId: option.type === 'agent' ? option.id : undefined,
-      sessionId: '',
-      title: option.label,
-    });
-    setActiveTab(tabId);
+    close();
 
     try {
       const ws = workspaces.find((w) => w.id === activeWorkspaceId);
       const sessionId = await window.aide.terminal.spawn(
         option.command ? { shell: option.command, cwd: ws?.path } : { cwd: ws?.path }
       );
-      updateTabSession(tabId, sessionId);
+
+      const tab = {
+        id: crypto.randomUUID(),
+        type: option.type as 'agent' | 'shell',
+        agentId: option.type === 'agent' ? option.id : undefined,
+        sessionId,
+        title: option.label,
+      };
+
+      // Add to both stores with real sessionId
+      addTab(tab);
+      setActiveTab(tab.id);
+
+      const targetPaneId = paneId ?? useLayoutStore.getState().getFocusedPane()?.id;
+      if (targetPaneId) {
+        useLayoutStore.getState().addTabToPane(targetPaneId, tab);
+      }
     } catch {
       // ignore spawn errors
     }
-    toggleDropdown();
   };
 
   return (

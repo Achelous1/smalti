@@ -71,48 +71,77 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Initialize xterm once
+  // Initialize xterm + connect to pty session (deferred by one frame for layout)
   useEffect(() => {
-    if (!containerRef.current) return;
+    console.log('[TerminalPanel] init effect', { sessionId, hasContainer: !!containerRef.current });
+    if (!containerRef.current || !sessionId) return;
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let inputDisposable: { dispose: () => void } | null = null;
+    let unsubscribe: (() => void) | null = null;
 
-    const terminal = new Terminal({
-      theme: useThemeStore.getState().theme === 'dark' ? DARK_THEME : LIGHT_THEME,
-      fontFamily: "'JetBrains Mono', 'IBM Plex Mono', Menlo, Monaco, monospace",
-      fontSize: 13,
-      cursorBlink: true,
-      cursorStyle: 'block',
-      allowTransparency: false,
+    const raf = requestAnimationFrame(() => {
+      if (cancelled || !containerRef.current) return;
+
+      const terminal = new Terminal({
+        theme: useThemeStore.getState().theme === 'dark' ? DARK_THEME : LIGHT_THEME,
+        fontFamily: "'JetBrains Mono', 'IBM Plex Mono', Menlo, Monaco, monospace",
+        fontSize: 13,
+        cursorBlink: true,
+        cursorStyle: 'block',
+        allowTransparency: false,
+      });
+
+      const fitAddon = new FitAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.open(containerRef.current);
+      fitAddon.fit();
+
+      terminalRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+
+      console.log('[TerminalPanel] xterm opened', { sessionId: sessionIdRef.current, cols: terminal.cols, rows: terminal.rows, containerW: containerRef.current?.offsetWidth, containerH: containerRef.current?.offsetHeight });
+
+      // Connect pty input/output immediately after xterm is ready
+      inputDisposable = terminal.onData((data) => {
+        window.aide.terminal.write(sessionIdRef.current, data);
+      });
+      unsubscribe = window.aide.terminal.onData((incomingSessionId, data) => {
+        if (incomingSessionId === sessionIdRef.current) {
+          terminal.write(data);
+        }
+      });
+
+      // Resize pty to match terminal dimensions
+      window.aide.terminal.resize(sessionIdRef.current, terminal.cols, terminal.rows);
+
+      resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry || !fitAddonRef.current || !terminalRef.current) return;
+        const { width, height } = entry.contentRect;
+        if (width === 0 || height === 0) return;
+        fitAddonRef.current.fit();
+        const sid = sessionIdRef.current;
+        if (sid) {
+          window.aide.terminal.resize(sid, terminalRef.current.cols, terminalRef.current.rows);
+        }
+      });
+      resizeObserver.observe(containerRef.current);
     });
-
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(containerRef.current);
-    fitAddon.fit();
-
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry || !fitAddonRef.current || !terminalRef.current) return;
-      const { width, height } = entry.contentRect;
-      // Skip when hidden (display: none → size is 0)
-      if (width === 0 || height === 0) return;
-      fitAddonRef.current.fit();
-      const sid = sessionIdRef.current;
-      if (sid) {
-        window.aide.terminal.resize(sid, terminalRef.current.cols, terminalRef.current.rows);
-      }
-    });
-    resizeObserver.observe(containerRef.current);
 
     return () => {
-      resizeObserver.disconnect();
-      terminal.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      resizeObserver?.disconnect();
+      inputDisposable?.dispose();
+      unsubscribe?.();
+      if (terminalRef.current) {
+        terminalRef.current.dispose();
+        terminalRef.current = null;
+        fitAddonRef.current = null;
+      }
     };
-  }, []);
+  }, [sessionId]);
 
   // Update terminal theme when app theme changes
   useEffect(() => {
@@ -132,36 +161,6 @@ export function TerminalPanel({ sessionId, visible = true }: TerminalPanelProps)
     }, 50);
     return () => clearTimeout(timer);
   }, [visible]);
-
-  // Connect to sessionId — re-runs when sessionId changes
-  useEffect(() => {
-    if (!sessionId || !terminalRef.current) return;
-
-    const terminal = terminalRef.current;
-
-    // Send user input to this session's pty
-    const inputDisposable = terminal.onData((data) => {
-      window.aide.terminal.write(sessionId, data);
-    });
-
-    // Receive output from this session's pty
-    const unsubscribe = window.aide.terminal.onData((incomingSessionId, data) => {
-      if (incomingSessionId === sessionId) {
-        terminal.write(data);
-      }
-    });
-
-    // Resize pty to match terminal dimensions
-    if (fitAddonRef.current) {
-      fitAddonRef.current.fit();
-      window.aide.terminal.resize(sessionId, terminal.cols, terminal.rows);
-    }
-
-    return () => {
-      inputDisposable.dispose();
-      unsubscribe();
-    };
-  }, [sessionId]);
 
   return (
     <div

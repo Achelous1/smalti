@@ -1,16 +1,21 @@
 import { create } from 'zustand';
 import type { WorkspaceInfo } from '../../types/ipc';
 import { useTerminalStore } from './terminal-store';
+import { useLayoutStore } from './layout-store';
+
+type SidePanelTab = 'files' | 'plugins';
 
 interface WorkspaceState {
   workspaces: WorkspaceInfo[];
   activeWorkspaceId: string | null;
   recentProjects: WorkspaceInfo[];
   navExpanded: boolean;
+  sidePanelTab: SidePanelTab;
   addWorkspace: (workspace: WorkspaceInfo) => void;
   removeWorkspace: (id: string) => void;
   setActive: (id: string | null) => void;
   toggleNav: () => void;
+  setSidePanelTab: (tab: SidePanelTab) => void;
   loadRecent: (projects: WorkspaceInfo[]) => void;
   loadWorkspaces: () => Promise<void>;
 }
@@ -20,6 +25,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeWorkspaceId: null,
   recentProjects: [],
   navExpanded: true,
+  sidePanelTab: 'files',
+  setSidePanelTab: (tab) => set({ sidePanelTab: tab }),
   addWorkspace: (workspace) =>
     set((state) => ({ workspaces: [...state.workspaces, workspace] })),
   removeWorkspace: (id) =>
@@ -27,7 +34,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setActive: (id) => {
     const prevId = get().activeWorkspaceId;
     if (id && id !== prevId) {
+      // Save current layout before switching
+      if (prevId) {
+        useLayoutStore.getState().saveWorkspaceLayout(prevId);
+      }
       useTerminalStore.getState().switchWorkspace(prevId, id);
+      // Restore layout for new workspace
+      useLayoutStore.getState().restoreWorkspaceLayout(id);
     }
     set({ activeWorkspaceId: id });
   },
