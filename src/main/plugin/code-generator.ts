@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vm from 'vm';
 import type { PluginSpec } from './spec-generator';
 
 const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -88,4 +89,39 @@ module.exports = {
 `;
 
   fs.writeFileSync(path.join(pluginDir, 'index.js'), indexCode);
+}
+
+/** Write agent-provided real code instead of stubs */
+export function generatePluginFromAgent(
+  spec: PluginSpec,
+  code: string,
+  pluginDir: string,
+): void {
+  fs.mkdirSync(pluginDir, { recursive: true });
+
+  // Validate code compiles before writing
+  try {
+    vm.compileFunction(code, [], { filename: 'index.js' });
+  } catch (err) {
+    fs.rmSync(pluginDir, { recursive: true, force: true });
+    throw new Error(`Plugin code compilation failed: ${(err as Error).message}`);
+  }
+
+  fs.writeFileSync(
+    path.join(pluginDir, 'plugin.spec.json'),
+    JSON.stringify(spec, null, 2),
+  );
+
+  const toolManifest = {
+    pluginId: spec.id,
+    pluginName: spec.name,
+    version: spec.version,
+    tools: spec.tools,
+  };
+  fs.writeFileSync(
+    path.join(pluginDir, 'tool.json'),
+    JSON.stringify(toolManifest, null, 2),
+  );
+
+  fs.writeFileSync(path.join(pluginDir, 'index.js'), code);
 }

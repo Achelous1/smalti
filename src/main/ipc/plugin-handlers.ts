@@ -80,6 +80,32 @@ export function registerPluginHandlers(ipcMain: IpcMain): void {
     return { id: pluginId, active: false };
   });
 
+  ipcMain.handle(IPC_CHANNELS.PLUGIN_INVOKE, async (_event, pluginId: string, toolName: string, args: Record<string, unknown>) => {
+    const plugin = registry.get(pluginId);
+    if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
+    if (!plugin.active) {
+      registry.activate(pluginId, process.cwd());
+    }
+    // Re-read after activation — sandbox exports are on the module
+    const activated = registry.get(pluginId);
+    if (!activated?.sandbox) throw new Error(`Plugin ${pluginId} failed to activate`);
+    const exports = activated.sandbox.run(process.cwd());
+    if (typeof (exports as Record<string, unknown>).invoke !== 'function') {
+      throw new Error(`Plugin ${pluginId} does not export an invoke function`);
+    }
+    return (exports as { invoke: (t: string, a: Record<string, unknown>) => unknown }).invoke(toolName, args);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MCP_STATUS, async () => {
+    const plugins = registry.list();
+    const tools = registry.getRegisteredTools();
+    return { running: true, toolCount: tools.length, pluginCount: plugins.length };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MCP_TOOLS, async () => {
+    return registry.getRegisteredTools();
+  });
+
   ipcMain.handle(IPC_CHANNELS.PLUGIN_DELETE, async (_event, pluginName: string) => {
     const pluginDir = path.join(PLUGINS_DIR, pluginName);
     // Prevent path traversal — pluginDir must be inside PLUGINS_DIR

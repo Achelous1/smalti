@@ -4,6 +4,7 @@ import os from 'os';
 import { IPC_CHANNELS } from './channels';
 import { AgentStatusDetector } from '../agent/status-detector';
 import { getAgentSpawnConfig, COMMON_ENV, type AgentType } from '../agent/agent-config';
+import { getMcpConfigPath } from '../mcp/config-writer';
 import type { AgentStatus } from '../../types/ipc';
 
 interface PtySession {
@@ -48,7 +49,8 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
       const cwd = options?.cwd || os.homedir();
       const sessionId = `term-${++sessionCounter}`;
 
-      const agentConfig = getAgentSpawnConfig(options?.agentType ?? 'shell', defaultShell);
+      const mcpConfig = getMcpConfigPath();
+      const agentConfig = getAgentSpawnConfig(options?.agentType ?? 'shell', defaultShell, mcpConfig);
       const shell = options?.agentType ? agentConfig.command : (options?.shell || defaultShell);
 
       // Build env from explicit allowlist — never spread full process.env
@@ -57,6 +59,7 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
       const allowedKeys = [
         'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE',
         'SHELL', 'TERM', 'TMPDIR', 'XDG_RUNTIME_DIR',
+        'AIDE_PLUGINS_DIR', 'AIDE_WORKSPACE',
       ];
       for (const key of allowedKeys) {
         if (process.env[key]) safeBaseEnv[key] = process.env[key] as string;

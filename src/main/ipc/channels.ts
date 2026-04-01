@@ -33,6 +33,11 @@ export const IPC_CHANNELS = {
   PLUGIN_ACTIVATE: 'plugin:activate',
   PLUGIN_DEACTIVATE: 'plugin:deactivate',
   PLUGIN_DELETE: 'plugin:delete',
+  PLUGIN_INVOKE: 'plugin:invoke',
+
+  // MCP
+  MCP_STATUS: 'mcp:status',
+  MCP_TOOLS: 'mcp:tools',
 
   // GitHub
   GITHUB_LIST_PRS: 'github:list-prs',

@@ -8,6 +8,7 @@ import { registerAgentHandlers } from './ipc/agent-handlers';
 import { registerGitHandlers } from './ipc/git-handlers';
 import { registerGithubHandlers } from './ipc/github-handlers';
 import { registerPluginHandlers } from './ipc/plugin-handlers';
+import { writeMcpConfig } from './mcp/config-writer';
 
 fixPackagedEnv();
 
@@ -69,6 +70,7 @@ app.on('ready', () => {
   registerGitHandlers(ipcMain);
   registerGithubHandlers(ipcMain);
   registerPluginHandlers(ipcMain);
+  writeMcpConfig(app.getPath('home'));
   createWindow();
 });
 

@@ -57,7 +57,7 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   generate: async (name: string, description: string) => {
     set({ generating: true, generateError: null });
     try {
-      const spec = await window.aide.plugin.generateSpec(name, description);
+      const spec = await window.aide.plugin.generate(name, description);
       // Reload the plugin list after generation
       const plugins = await window.aide.plugin.list();
       set({ plugins, generating: false });
