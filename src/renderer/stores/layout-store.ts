@@ -271,13 +271,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   splitPaneWithTab: (targetPaneId, direction, position, tab, fromPaneId) => {
-    console.log('[layout-store] splitPaneWithTab', { targetPaneId, direction, position, tabId: tab.id, fromPaneId });
     set((state) => {
       const totalPanes = collectPanes(state.layout).length;
-      console.log('[layout-store] splitPaneWithTab checks', { totalPanes, visCols: countVisualColumns(state.layout), visRows: countVisualRows(state.layout) });
       if (totalPanes >= 6) return state;
-      if (direction === 'horizontal' && countVisualColumns(state.layout) >= 3) return state;
-      if (direction === 'vertical' && countVisualRows(state.layout) >= 2) return state;
 
       const layout = cloneNode(state.layout);
 
@@ -324,8 +320,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           // Clean up empty source pane
           if (fromPane && fromPane.tabs.length === 0 && fromPaneId !== targetPaneId) {
             const newLayout = removeChild(newSplit, fromPaneId);
+            if (countVisualColumns(newLayout) > 3 || countVisualRows(newLayout) > 2) return state;
             return { layout: newLayout, focusedPaneId: newPane.id };
           }
+          if (countVisualColumns(newSplit) > 3 || countVisualRows(newSplit) > 2) return state;
           return { layout: newSplit, focusedPaneId: newPane.id };
         }
 
@@ -339,10 +337,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         const allPanes = collectPanes(layout);
         if (allPanes.length > 1) {
           const cleaned = removeChild(layout, fromPaneId);
+          if (countVisualColumns(cleaned) > 3 || countVisualRows(cleaned) > 2) return state;
           return { layout: cleaned, focusedPaneId: newPane.id };
         }
       }
 
+      if (countVisualColumns(layout) > 3 || countVisualRows(layout) > 2) return state;
       return { layout, focusedPaneId: newPane.id };
     });
   },
