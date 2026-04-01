@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { WorkspaceInfo } from '../../types/ipc';
 import { useTerminalStore } from './terminal-store';
+import { useLayoutStore } from './layout-store';
 
 type SidePanelTab = 'files' | 'plugins';
 
@@ -33,7 +34,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setActive: (id) => {
     const prevId = get().activeWorkspaceId;
     if (id && id !== prevId) {
+      // Save current layout before switching
+      if (prevId) {
+        useLayoutStore.getState().saveWorkspaceLayout(prevId);
+      }
       useTerminalStore.getState().switchWorkspace(prevId, id);
+      // Restore layout for new workspace
+      useLayoutStore.getState().restoreWorkspaceLayout(id);
     }
     set({ activeWorkspaceId: id });
   },

@@ -106,10 +106,17 @@ interface LayoutState {
   // Layout reset
   resetLayout: (initialTabs?: TerminalTab[]) => void;
 
+  // Workspace layout persistence
+  saveWorkspaceLayout: (workspaceId: string) => void;
+  restoreWorkspaceLayout: (workspaceId: string) => void;
+
   // Helpers
   getAllPanes: () => Pane[];
   getFocusedPane: () => Pane | null;
 }
+
+// Per-workspace layout cache (in-memory, survives workspace switches)
+const workspaceLayouts = new Map<string, { layout: LayoutNode; focusedPaneId: string | null }>();
 
 function collectPanes(node: LayoutNode): Pane[] {
   if (isSplitLayout(node)) {
@@ -299,6 +306,21 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   resetLayout: (initialTabs) => {
     const pane = createPane(initialTabs ?? [], initialTabs?.[0]?.id ?? null);
     set({ layout: pane, focusedPaneId: pane.id });
+  },
+
+  saveWorkspaceLayout: (workspaceId) => {
+    const { layout, focusedPaneId } = get();
+    workspaceLayouts.set(workspaceId, { layout: cloneNode(layout), focusedPaneId });
+  },
+
+  restoreWorkspaceLayout: (workspaceId) => {
+    const saved = workspaceLayouts.get(workspaceId);
+    if (saved) {
+      set({ layout: cloneNode(saved.layout), focusedPaneId: saved.focusedPaneId });
+    } else {
+      const pane = createPane();
+      set({ layout: pane, focusedPaneId: pane.id });
+    }
   },
 
   getAllPanes: () => collectPanes(get().layout),

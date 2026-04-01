@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usePluginStore } from '../../stores/plugin-store';
+import { useLayoutStore } from '../../stores/layout-store';
 
 export function PluginPanel() {
   const {
@@ -27,9 +28,30 @@ export function PluginPanel() {
     const name = pluginName.trim();
     const desc = pluginDesc.trim();
     if (!name || !desc) return;
-    await generate(name, desc);
+    const spec = await generate(name, desc);
     setPluginName('');
     setPluginDesc('');
+
+    // Offer to open plugin in a new pane
+    if (spec && window.confirm(`Open "${name}" in a new pane?`)) {
+      const pane = useLayoutStore.getState().getFocusedPane();
+      if (pane) {
+        const pluginTab = {
+          id: `plugin-${spec.id}`,
+          type: 'plugin' as const,
+          pluginId: spec.id,
+          sessionId: '',
+          title: name,
+        };
+        useLayoutStore.getState().splitPane(pane.id, 'horizontal');
+        // After split, add tab to the newly created pane (last pane)
+        const panes = useLayoutStore.getState().getAllPanes();
+        const newPane = panes[panes.length - 1];
+        if (newPane) {
+          useLayoutStore.getState().addTabToPane(newPane.id, pluginTab);
+        }
+      }
+    }
   };
 
   const handleDeleteClick = (name: string) => {

@@ -117,6 +117,21 @@ export function App() {
         return;
       }
 
+      // ⌘⇧[ / ⌘⇧]: switch focused pane
+      if (e.shiftKey && (e.key === '[' || e.key === ']')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const panes = useLayoutStore.getState().getAllPanes();
+        if (panes.length < 2) return;
+        const currentId = useLayoutStore.getState().focusedPaneId;
+        const idx = panes.findIndex((p) => p.id === currentId);
+        const next = e.key === ']'
+          ? panes[(idx + 1) % panes.length]
+          : panes[(idx - 1 + panes.length) % panes.length];
+        useLayoutStore.getState().setFocusedPane(next.id);
+        return;
+      }
+
       // ⌘1-9 / Ctrl+1-9: switch to tab by number in focused pane
       const digit = parseInt(e.key, 10);
       if (digit >= 1 && digit <= 9) {
