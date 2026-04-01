@@ -19,12 +19,17 @@ function validateParamName(name: string): string {
 }
 
 export function generatePluginCode(spec: PluginSpec, pluginDir: string): void {
-  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.mkdirSync(path.join(pluginDir, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(pluginDir, 'mcp'), { recursive: true });
+  fs.mkdirSync(path.join(pluginDir, 'skill'), { recursive: true });
+
+  // Update entryPoint to src/index.js
+  const updatedSpec = { ...spec, entryPoint: 'src/index.js' };
 
   // Write plugin.spec.json
   fs.writeFileSync(
     path.join(pluginDir, 'plugin.spec.json'),
-    JSON.stringify(spec, null, 2),
+    JSON.stringify(updatedSpec, null, 2),
   );
 
   // Generate tool.json manifest
@@ -39,7 +44,7 @@ export function generatePluginCode(spec: PluginSpec, pluginDir: string): void {
     JSON.stringify(toolManifest, null, 2),
   );
 
-  // Generate index.js entry point — all user-controlled strings are escaped
+  // Generate src/index.js entry point — all user-controlled strings are escaped
   const safeName = escapeJsString(spec.name);
   const safeDesc = escapeJsString(spec.description);
   const safeVersion = escapeJsString(spec.version);
@@ -88,7 +93,7 @@ module.exports = {
 };
 `;
 
-  fs.writeFileSync(path.join(pluginDir, 'index.js'), indexCode);
+  fs.writeFileSync(path.join(pluginDir, 'src', 'index.js'), indexCode);
 }
 
 /** Write agent-provided real code instead of stubs */
@@ -97,8 +102,6 @@ export function generatePluginFromAgent(
   code: string,
   pluginDir: string,
 ): void {
-  fs.mkdirSync(pluginDir, { recursive: true });
-
   // Validate code compiles before writing
   try {
     vm.compileFunction(code, [], { filename: 'index.js' });
@@ -106,6 +109,12 @@ export function generatePluginFromAgent(
     fs.rmSync(pluginDir, { recursive: true, force: true });
     throw new Error(`Plugin code compilation failed: ${(err as Error).message}`);
   }
+
+  // Resolve the entry path from the spec; create parent dirs as needed
+  const entryPath = path.join(pluginDir, spec.entryPoint);
+  fs.mkdirSync(path.dirname(entryPath), { recursive: true });
+  fs.mkdirSync(path.join(pluginDir, 'mcp'), { recursive: true });
+  fs.mkdirSync(path.join(pluginDir, 'skill'), { recursive: true });
 
   fs.writeFileSync(
     path.join(pluginDir, 'plugin.spec.json'),
@@ -123,5 +132,5 @@ export function generatePluginFromAgent(
     JSON.stringify(toolManifest, null, 2),
   );
 
-  fs.writeFileSync(path.join(pluginDir, 'index.js'), code);
+  fs.writeFileSync(entryPath, code);
 }

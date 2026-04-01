@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import * as fs from 'fs';
 import path from 'path';
 import { fixPackagedEnv } from './fix-env';
 import { registerIpcHandlers } from './ipc/handlers';
@@ -63,13 +64,18 @@ const createWindow = (): void => {
 };
 
 app.on('ready', () => {
+  // Ensure global plugin directory exists on startup
+  const globalPluginsDir = path.join(app.getPath('home'), '.aide', 'plugins');
+  if (!fs.existsSync(globalPluginsDir)) {
+    fs.mkdirSync(globalPluginsDir, { recursive: true });
+  }
   registerIpcHandlers();
   registerWorkspaceHandlers(ipcMain);
   registerFsHandlers(ipcMain, process.cwd());
   registerAgentHandlers(ipcMain);
   registerGitHandlers(ipcMain);
   registerGithubHandlers(ipcMain);
-  registerPluginHandlers(ipcMain);
+  registerPluginHandlers(ipcMain, process.cwd());
   writeMcpConfig(app.getPath('home'));
   createWindow();
 });

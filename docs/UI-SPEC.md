@@ -85,6 +85,19 @@
 
 현재 선택된 프로젝트는 `surface-elevated` 배경으로 하이라이트.
 
+#### Project Context Menu (우클릭)
+
+프로젝트 항목 우클릭 시 컨텍스트 메뉴 표시.
+
+| 항목 | 동작 |
+|------|------|
+| `Open in Terminal` | 해당 프로젝트로 전환 (Terminal Page) |
+| `Show in Finder / Explorer` | OS 파일 탐색기에서 경로 열기 |
+| Divider | — |
+| `Remove from Workspace` | AIDE 워크스페이스 목록에서 제거 (로컬 파일 유지). 확인 불필요. 현재 열려 있던 경우 Welcome Page로 이동. |
+
+> **Note**: AIDE는 프로젝트 폴더를 직접 삭제하는 기능을 제공하지 않음. 파일 삭제는 OS 파일 탐색기에서 수행.
+
 ### 2.4 Hero Section
 
 | Element | Spec | 동작 |
