@@ -46,6 +46,16 @@ function findParentSplit(
   return null;
 }
 
+/** Count max children in any split of a given direction */
+function maxChildrenInDirection(node: LayoutNode, dir: 'horizontal' | 'vertical'): number {
+  if (!isSplitLayout(node)) return 1;
+  let max = node.direction === dir ? node.children.length : 1;
+  for (const child of node.children) {
+    max = Math.max(max, maxChildrenInDirection(child, dir));
+  }
+  return max;
+}
+
 /** Deep-clone a layout node (plain JSON, no cycles) */
 function cloneNode<T extends LayoutNode>(node: T): T {
   return JSON.parse(JSON.stringify(node));
@@ -131,6 +141,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   splitPane: (paneId, direction) => {
     set((state) => {
+      // Enforce max 3 horizontal, max 2 vertical (3×2 grid limit)
+      const maxH = maxChildrenInDirection(state.layout, 'horizontal');
+      const maxV = maxChildrenInDirection(state.layout, 'vertical');
+      if (direction === 'horizontal' && maxH >= 3) return state;
+      if (direction === 'vertical' && maxV >= 2) return state;
+
       const layout = cloneNode(state.layout);
       const pane = findPane(layout, paneId);
       if (!pane) return state;

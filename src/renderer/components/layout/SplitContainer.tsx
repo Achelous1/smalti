@@ -26,31 +26,39 @@ export function SplitContainer({ node }: SplitContainerProps) {
 
   const isHorizontal = node.direction === 'horizontal';
 
+  // Build children interleaved with dividers (no display:contents wrapper)
+  const elements: React.ReactNode[] = [];
+  node.children.forEach((child, i) => {
+    elements.push(
+      <div
+        key={child.id}
+        style={{
+          [isHorizontal ? 'width' : 'height']: `calc(${node.sizes[i]}% - ${(node.children.length - 1) / node.children.length}px)`,
+          flexShrink: 0,
+          flexGrow: 0,
+          overflow: 'hidden',
+          display: 'flex',
+        }}
+      >
+        <SplitContainer node={child} />
+      </div>,
+    );
+    if (i < node.children.length - 1) {
+      elements.push(
+        <ResizeDivider
+          key={`div-${node.id}-${i}`}
+          splitId={node.id}
+          index={i}
+          direction={node.direction}
+          sizes={node.sizes}
+        />,
+      );
+    }
+  });
+
   return (
     <div className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} w-full h-full`}>
-      {node.children.map((child, i) => (
-        <div key={child.id} className="flex" style={{ display: 'contents' }}>
-          <div
-            style={{
-              flexBasis: `${node.sizes[i]}%`,
-              flexGrow: 0,
-              flexShrink: 0,
-              overflow: 'hidden',
-              display: 'flex',
-            }}
-          >
-            <SplitContainer node={child} />
-          </div>
-          {i < node.children.length - 1 && (
-            <ResizeDivider
-              splitId={node.id}
-              index={i}
-              direction={node.direction}
-              sizes={node.sizes}
-            />
-          )}
-        </div>
-      ))}
+      {elements}
     </div>
   );
 }
@@ -66,6 +74,7 @@ interface ResizeDividerProps {
 
 function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps) {
   const resizePanes = useLayoutStore((s) => s.resizePanes);
+  const dividerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const startPos = useRef(0);
   const startSizes = useRef<number[]>([]);
@@ -79,7 +88,8 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
       startPos.current = isHorizontal ? e.clientX : e.clientY;
       startSizes.current = [...sizes];
 
-      const parentEl = (e.target as HTMLElement).parentElement?.parentElement;
+      // The flex container is the divider's direct parent
+      const parentEl = dividerRef.current?.parentElement;
       const parentSize = parentEl
         ? isHorizontal
           ? parentEl.offsetWidth
@@ -92,9 +102,12 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
         const deltaPct = (delta / parentSize) * 100;
 
         const newSizes = [...startSizes.current];
-        const minSize = 10; // minimum 10%
-        newSizes[index] = Math.max(minSize, startSizes.current[index] + deltaPct);
-        newSizes[index + 1] = Math.max(minSize, startSizes.current[index + 1] - deltaPct);
+        const minSize = 10;
+        const pairTotal = startSizes.current[index] + startSizes.current[index + 1];
+        const rawLeft = startSizes.current[index] + deltaPct;
+
+        newSizes[index] = Math.max(minSize, Math.min(pairTotal - minSize, rawLeft));
+        newSizes[index + 1] = pairTotal - newSizes[index];
 
         resizePanes(splitId, newSizes);
       };
@@ -117,6 +130,7 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
 
   return (
     <div
+      ref={dividerRef}
       onMouseDown={onMouseDown}
       className={`shrink-0 bg-aide-border hover:bg-blue-500 transition-colors relative group ${
         isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'
