@@ -47,11 +47,25 @@ export function DndProvider({ children }: DndProviderProps) {
 
     // Dropped on a pane drop zone (cross-pane move or split)
     if (overData?.paneId && overData.paneId !== sourcePaneId) {
-      const dropEdge = overData.dropEdge as string | undefined;
       const targetPaneId = overData.paneId as string;
       const tab = sourceData.tab as TerminalTab;
 
-      if (dropEdge && dropEdge !== 'center' && tab) {
+      // Calculate edge from drop coordinates (not stale droppable data)
+      let dropEdge: 'left' | 'right' | 'top' | 'bottom' | 'center' = 'center';
+      if (over.rect) {
+        const rect = over.rect;
+        const mouseX = (event.activatorEvent as MouseEvent).clientX + (event.delta?.x ?? 0);
+        const mouseY = (event.activatorEvent as MouseEvent).clientY + (event.delta?.y ?? 0);
+        const relX = (mouseX - rect.left) / rect.width;
+        const relY = (mouseY - rect.top) / rect.height;
+
+        if (relX < 0.3) dropEdge = 'left';
+        else if (relX > 0.7) dropEdge = 'right';
+        else if (relY < 0.3) dropEdge = 'top';
+        else if (relY > 0.7) dropEdge = 'bottom';
+      }
+
+      if (dropEdge !== 'center' && tab) {
         // Edge drop → split pane
         const direction = (dropEdge === 'left' || dropEdge === 'right') ? 'horizontal' : 'vertical';
         const position = (dropEdge === 'left' || dropEdge === 'top') ? 'before' : 'after';
