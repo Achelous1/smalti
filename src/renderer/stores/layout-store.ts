@@ -114,6 +114,9 @@ interface LayoutState {
   closePaneAndMergeTabs: (paneId: string) => void;
   setFocusedPane: (paneId: string) => void;
 
+  // Split + move tab in one action
+  splitPaneWithTab: (targetPaneId: string, direction: 'horizontal' | 'vertical', position: 'before' | 'after', tab: TerminalTab, fromPaneId: string) => void;
+
   // Tab operations
   addTabToPane: (paneId: string, tab: TerminalTab) => void;
   removeTabFromPane: (paneId: string, tabId: string) => void;
@@ -264,6 +267,81 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       // Remove the closing pane from tree
       const newLayout = removeChild(layout, paneId);
       return { layout: newLayout, focusedPaneId: targetPane.id };
+    });
+  },
+
+  splitPaneWithTab: (targetPaneId, direction, position, tab, fromPaneId) => {
+    set((state) => {
+      const totalPanes = collectPanes(state.layout).length;
+      if (totalPanes >= 6) return state;
+      if (direction === 'horizontal' && countVisualColumns(state.layout) >= 3) return state;
+      if (direction === 'vertical' && countVisualRows(state.layout) >= 2) return state;
+
+      const layout = cloneNode(state.layout);
+
+      // Remove tab from source pane
+      const fromPane = findPane(layout, fromPaneId);
+      if (fromPane) {
+        const idx = fromPane.tabs.findIndex((t) => t.id === tab.id);
+        if (idx >= 0) fromPane.tabs.splice(idx, 1);
+        if (fromPane.activeTabId === tab.id) {
+          fromPane.activeTabId = fromPane.tabs[0]?.id ?? null;
+        }
+      }
+
+      // Create new pane with the tab
+      const newPane = createPane([tab], tab.id);
+
+      // Insert new pane relative to target
+      const parentInfo = findParentSplit(layout, targetPaneId);
+
+      if (parentInfo && parentInfo.parent.direction === direction) {
+        // Same direction parent: add sibling
+        const maxChildren = direction === 'horizontal' ? 3 : 2;
+        if (parentInfo.parent.children.length >= maxChildren) return state;
+        const insertIdx = position === 'before' ? parentInfo.index : parentInfo.index + 1;
+        parentInfo.parent.children.splice(insertIdx, 0, newPane);
+        const count = parentInfo.parent.children.length;
+        parentInfo.parent.sizes = Array(count).fill(100 / count);
+      } else {
+        // Different direction or root: wrap in new split
+        const targetPane = findPane(layout, targetPaneId);
+        if (!targetPane) return state;
+
+        const children = position === 'before'
+          ? [newPane, { ...targetPane }]
+          : [{ ...targetPane }, newPane];
+        const newSplit: SplitLayout = {
+          id: newSplitId(),
+          direction,
+          children,
+          sizes: [50, 50],
+        };
+
+        if (layout.id === targetPaneId) {
+          // Clean up empty source pane
+          if (fromPane && fromPane.tabs.length === 0 && fromPaneId !== targetPaneId) {
+            const newLayout = removeChild(newSplit, fromPaneId);
+            return { layout: newLayout, focusedPaneId: newPane.id };
+          }
+          return { layout: newSplit, focusedPaneId: newPane.id };
+        }
+
+        if (parentInfo) {
+          parentInfo.parent.children[parentInfo.index] = newSplit;
+        }
+      }
+
+      // Clean up empty source pane
+      if (fromPane && fromPane.tabs.length === 0 && fromPaneId !== targetPaneId) {
+        const allPanes = collectPanes(layout);
+        if (allPanes.length > 1) {
+          const cleaned = removeChild(layout, fromPaneId);
+          return { layout: cleaned, focusedPaneId: newPane.id };
+        }
+      }
+
+      return { layout, focusedPaneId: newPane.id };
     });
   },
 

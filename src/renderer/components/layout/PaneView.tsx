@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useDroppable } from '@dnd-kit/core';
+import { useDroppable, useDndMonitor } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TerminalPanel } from '../terminal/TerminalPanel';
@@ -134,10 +134,42 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
     });
   }, [pane.tabs.length, pane.id, addTabToPane]);
 
+  // Edge detection for drag-to-split
+  type DropEdge = 'left' | 'right' | 'top' | 'bottom' | 'center' | null;
+  const [dropEdge, setDropEdge] = useState<DropEdge>(null);
+  const dropAreaRef = useRef<HTMLDivElement>(null);
+
   // Droppable zone for cross-pane drops
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `pane-drop-${pane.id}`,
-    data: { paneId: pane.id },
+    data: { paneId: pane.id, dropEdge },
+  });
+
+  // Combine refs
+  const setDropRefs = useCallback((node: HTMLDivElement | null) => {
+    setDropRef(node);
+    (dropAreaRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  }, [setDropRef]);
+
+  // Track mouse position during drag to detect edge
+  useDndMonitor({
+    onDragMove(event) {
+      if (!isOver || !dropAreaRef.current) { setDropEdge(null); return; }
+      const rect = dropAreaRef.current.getBoundingClientRect();
+      const x = (event.activatorEvent as MouseEvent).clientX + (event.delta?.x ?? 0);
+      const y = (event.activatorEvent as MouseEvent).clientY + (event.delta?.y ?? 0);
+      const relX = (x - rect.left) / rect.width;
+      const relY = (y - rect.top) / rect.height;
+
+      // Determine edge (30% threshold)
+      if (relX < 0.3) setDropEdge('left');
+      else if (relX > 0.7) setDropEdge('right');
+      else if (relY < 0.3) setDropEdge('top');
+      else if (relY > 0.7) setDropEdge('bottom');
+      else setDropEdge('center');
+    },
+    onDragEnd() { setDropEdge(null); },
+    onDragCancel() { setDropEdge(null); },
   });
 
   const isFocused = focusedPaneId === pane.id;
@@ -225,13 +257,26 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
       )}
 
       {/* Content area — also a drop zone */}
-      <div ref={setDropRef} className="flex-1 overflow-hidden relative">
-        {isOver && (
+      <div ref={setDropRefs} className="flex-1 overflow-hidden relative">
+        {isOver && dropEdge && (
           <div
-            className="absolute inset-0 z-30 flex items-center justify-center"
-            style={{ backgroundColor: '#3B82F633', border: '2px solid #3B82F6' }}
+            className="absolute z-30 flex items-center justify-center pointer-events-none"
+            style={{
+              backgroundColor: '#3B82F633',
+              border: '2px solid #3B82F6',
+              ...(dropEdge === 'left' ? { top: 0, left: 0, bottom: 0, width: '50%' } :
+                 dropEdge === 'right' ? { top: 0, right: 0, bottom: 0, width: '50%' } :
+                 dropEdge === 'top' ? { top: 0, left: 0, right: 0, height: '50%' } :
+                 dropEdge === 'bottom' ? { bottom: 0, left: 0, right: 0, height: '50%' } :
+                 { top: 0, left: 0, right: 0, bottom: 0 }),
+            }}
           >
-            <span className="text-white text-[14px] font-mono">◈ Drop to open here</span>
+            <span className="text-white text-[13px] font-mono opacity-80">
+              {dropEdge === 'center' ? 'Move here' :
+               dropEdge === 'left' ? '← Split Left' :
+               dropEdge === 'right' ? 'Split Right →' :
+               dropEdge === 'top' ? '↑ Split Top' : 'Split Bottom ↓'}
+            </span>
           </div>
         )}
         {pane.tabs.map((tab) => {

@@ -45,9 +45,21 @@ export function DndProvider({ children }: DndProviderProps) {
 
     const sourcePaneId = sourceData.paneId as string;
 
-    // Dropped on a pane drop zone (cross-pane move)
+    // Dropped on a pane drop zone (cross-pane move or split)
     if (overData?.paneId && overData.paneId !== sourcePaneId) {
-      useLayoutStore.getState().moveTab(sourcePaneId, overData.paneId as string, active.id as string);
+      const dropEdge = overData.dropEdge as string | undefined;
+      const targetPaneId = overData.paneId as string;
+      const tab = sourceData.tab as TerminalTab;
+
+      if (dropEdge && dropEdge !== 'center' && tab) {
+        // Edge drop → split pane
+        const direction = (dropEdge === 'left' || dropEdge === 'right') ? 'horizontal' : 'vertical';
+        const position = (dropEdge === 'left' || dropEdge === 'top') ? 'before' : 'after';
+        useLayoutStore.getState().splitPaneWithTab(targetPaneId, direction, position, tab, sourcePaneId);
+      } else {
+        // Center drop → move tab to existing pane
+        useLayoutStore.getState().moveTab(sourcePaneId, targetPaneId, active.id as string);
+      }
       return;
     }
 
