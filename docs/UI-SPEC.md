@@ -321,34 +321,31 @@ Welcome Page의 Workspace Navbar와 동일한 구조.
 
 ### 3.7.5 Plugin Panel (Side Panel — Plugins Tab)
 
-Plugins 탭 선택 시 사이드 패널에 표시되는 플러그인 관리 UI.
+Plugins 탭 선택 시 사이드 패널에 표시되는 플러그인 관리 UI. 플러그인 생성은 AI 에이전트 터미널을 통해 이루어지며, 이 패널은 설치된 플러그인의 관리(활성화/비활성화/삭제)만 담당한다.
 
-#### 생성 폼 (Generate Plugin)
+#### 플러그인 리스트 (Local / Global)
 
-| Element | Spec | 동작 |
-|---------|------|------|
-| Section Header | `GENERATE` (10px, uppercase, tertiary, 600 weight) | 섹션 제목 |
-| Name Input | 텍스트 입력 (12px, surface 배경, border, cornerRadius 4, 패딩 8px) | 플러그인 이름 |
-| Description Input | 멀티라인 입력 (12px, surface 배경, 3줄 높이) | 플러그인 설명 (자연어) |
-| Generate Button | `Generate Plugin` (12px, accent 배경, white 텍스트, cornerRadius 6, 높이 32px) | 클릭 → 플러그인 생성 파이프라인 실행 |
-| Loading State | 버튼 → `Generating...` + 스피너 | 생성 중 비활성화 |
-
-#### 플러그인 리스트 (Installed Plugins)
+플러그인은 범위(scope)에 따라 두 그룹으로 구분 표시된다.
 
 | Element | Spec | 동작 |
 |---------|------|------|
-| Section Header | `PLUGINS` (10px, uppercase, tertiary, 600 weight) | 섹션 제목 |
+| Section Header (`LOCAL`) | `LOCAL` (10px, uppercase, tertiary, 600 weight) | 현재 프로젝트에 종속된 플러그인 섹션 |
+| Section Header (`GLOBAL`) | `GLOBAL` (10px, uppercase, tertiary, 600 weight) | 모든 프로젝트에서 사용 가능한 플러그인 섹션 |
 | Plugin Item | 높이 36px, padding [0,12], gap 8 | 개별 플러그인 행 |
 | Plugin Name | 13px, text-primary | 플러그인 식별 |
 | Toggle Switch | 32×18px, cornerRadius 9 | ON: accent 배경 / OFF: surface 배경, border |
 | Delete Button | `×` (tertiary, 호버 시 표시) | 클릭 → 삭제 확인 후 제거 |
 | Empty State | `No plugins yet` (13px, tertiary, 중앙 정렬) | 플러그인 없을 때 표시 |
 
+**Toggle 동작**: ON 토글 활성화 시 현재 포커스된 창(pane)에 플러그인 탭이 생성된다. OFF 토글 시 해당 플러그인 탭이 제거된다.
+
 ### 3.8 Split-Screen & Drag Interaction
+
+> **참고**: 전역 TabBar는 존재하지 않는다. 각 창(pane)의 헤더(28px)가 해당 창의 탭 바 역할을 한다. 터미널 탭과 플러그인 탭이 동일한 pane 헤더 안에 공존한다.
 
 #### 분할 레이아웃
 
-메인 영역(MainArea)을 최대 3×2 그리드로 분할. 각 창(pane)은 독립 TabBar + 터미널/플러그인 영역을 보유.
+메인 영역(MainArea)을 최대 3×2 그리드로 분할. 각 창(pane)은 독립 pane 헤더(탭 바) + 터미널/플러그인 영역을 보유.
 
 | 레이아웃 | 구성 | 구분선 |
 |----------|------|--------|
@@ -458,14 +455,13 @@ Plugins 탭 선택 시 사이드 패널에 표시되는 플러그인 관리 UI.
 #### 플러그인 탭 동작 (Plugin-as-Tab)
 
 **플러그인 탭 생성 흐름**:
-1. 사이드 패널에서 `Generate Plugin` 실행 → 생성 완료
-2. 확인 다이얼로그: "Open [plugin-name] in a new pane?" (Yes / No)
-3. Yes → 현재 창 옆에 수평 분할 + 플러그인 탭 자동 생성
-4. No → 사이드 패널 Plugins 탭에서만 관리
+1. 사이드 패널 Plugins 탭에서 플러그인 Toggle을 ON으로 전환
+2. 현재 포커스된 창(pane)에 플러그인 탭이 즉시 생성됨
+3. Toggle OFF → 해당 플러그인 탭 제거
 
 **플러그인 탭 렌더링**:
-- 플러그인 UI는 sandboxed iframe 내에서 렌더링
-- iframe 소스: 플러그인 디렉토리의 `index.html` (플러그인이 UI를 제공하는 경우)
+- 플러그인 UI는 sandboxed iframe (`srcdoc`) 내에서 렌더링
+- iframe 소스: 플러그인의 UI 번들을 `srcdoc`으로 주입 (플러그인이 UI를 제공하는 경우)
 - UI 미제공 플러그인: "This plugin runs in the background" 메시지 + 활성화 상태 표시
 
 **플러그인 탭 식별**:
