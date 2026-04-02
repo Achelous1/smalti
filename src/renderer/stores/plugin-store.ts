@@ -32,21 +32,23 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   },
 
   activate: async (id: string) => {
-    await window.aide.plugin.activate(id);
-    set({
-      plugins: get().plugins.map((p) =>
-        p.id === id ? { ...p, active: true } : p
-      ),
-    });
+    try {
+      await window.aide.plugin.activate(id);
+      const plugins = await window.aide.plugin.list();
+      set({ plugins });
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Failed to activate plugin' });
+    }
   },
 
   deactivate: async (id: string) => {
-    await window.aide.plugin.deactivate(id);
-    set({
-      plugins: get().plugins.map((p) =>
-        p.id === id ? { ...p, active: false } : p
-      ),
-    });
+    try {
+      await window.aide.plugin.deactivate(id);
+      const plugins = await window.aide.plugin.list();
+      set({ plugins });
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Failed to deactivate plugin' });
+    }
   },
 
   deletePlugin: async (name: string) => {
