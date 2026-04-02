@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '../main/ipc/channels';
-import type { AideAPI, AgentStatus, GitStatus, TerminalSpawnOptions, PluginSpec } from '../types/ipc';
+import type { AideAPI, AgentStatus, GitStatus, TerminalSpawnOptions, PluginSpec, McpStatus, PluginTool } from '../types/ipc';
 
 const aideAPI: AideAPI = {
   fs: {
@@ -106,6 +106,13 @@ const aideAPI: AideAPI = {
     activate: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_ACTIVATE, id),
     deactivate: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_DEACTIVATE, id),
     delete: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_DELETE, name),
+    invoke: (pluginId: string, toolName: string, args: Record<string, unknown>) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_INVOKE, pluginId, toolName, args),
+  },
+
+  mcp: {
+    status: (): Promise<McpStatus> => ipcRenderer.invoke(IPC_CHANNELS.MCP_STATUS),
+    tools: (): Promise<PluginTool[]> => ipcRenderer.invoke(IPC_CHANNELS.MCP_TOOLS),
   },
 
   github: {

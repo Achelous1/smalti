@@ -35,16 +35,17 @@ function pickEnvByPrefix(prefix: string): Record<string, string> {
   return result;
 }
 
-export function getAgentSpawnConfig(agentType: AgentType, defaultShell: string): AgentSpawnConfig {
+export function getAgentSpawnConfig(agentType: AgentType, defaultShell: string, mcpConfigPath?: string): AgentSpawnConfig {
   switch (agentType) {
     case 'claude':
       return {
         command: 'claude',
-        args: [],
+        args: mcpConfigPath ? ['--mcp-config', mcpConfigPath] : [],
         extraEnv: pickEnvByPrefix('ANTHROPIC_'),
         promptPattern: /[❯>]\s*$/,
       };
     case 'gemini':
+      // TODO: add MCP support when gemini CLI supports it
       return {
         command: 'gemini',
         args: [],
@@ -52,6 +53,7 @@ export function getAgentSpawnConfig(agentType: AgentType, defaultShell: string):
         promptPattern: />\s*$/,
       };
     case 'codex':
+      // TODO: add MCP support when codex CLI supports it
       return {
         command: 'codex',
         args: [],

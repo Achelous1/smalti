@@ -126,6 +126,36 @@ export interface PluginSpec {
   entryPoint: string;
 }
 
+/** Request to create a plugin from agent-generated code */
+export interface PluginCreateRequest {
+  name: string;
+  description: string;
+  code: string;
+  permissions: string[];
+  tools: PluginTool[];
+}
+
+/** Request to invoke a registered plugin tool */
+export interface PluginInvokeRequest {
+  pluginId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+}
+
+/** Result from invoking a plugin tool */
+export interface PluginInvokeResult {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+/** MCP server status */
+export interface McpStatus {
+  running: boolean;
+  toolCount: number;
+  pluginCount: number;
+}
+
 /** IPC API exposed to renderer via contextBridge */
 export interface AideAPI {
   fs: {
@@ -171,6 +201,11 @@ export interface AideAPI {
     activate(id: string): Promise<void>;
     deactivate(id: string): Promise<void>;
     delete(name: string): Promise<void>;
+    invoke(pluginId: string, toolName: string, args: Record<string, unknown>): Promise<unknown>;
+  };
+  mcp: {
+    status(): Promise<McpStatus>;
+    tools(): Promise<PluginTool[]>;
   };
   github: {
     listPRs(owner: string, repo: string): Promise<GithubPR[]>;

@@ -61,6 +61,10 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     const workspaces = getWorkspaces();
     workspaces.push(workspace);
     setWorkspaces(workspaces);
+    const aideDirPath = nodePath.join(path, '.aide', 'plugins');
+    if (!fs.existsSync(aideDirPath)) {
+      fs.mkdirSync(aideDirPath, { recursive: true });
+    }
     return workspace;
   });
 
@@ -71,6 +75,10 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     if (workspace) {
       workspace.lastOpened = Date.now();
       setWorkspaces(workspaces);
+    }
+    const aideDirPath = nodePath.join(path, '.aide', 'plugins');
+    if (!fs.existsSync(aideDirPath)) {
+      fs.mkdirSync(aideDirPath, { recursive: true });
     }
     return activeWorkspacePath;
   });

@@ -1,58 +1,22 @@
 import { useEffect, useState } from 'react';
 import { usePluginStore } from '../../stores/plugin-store';
-import { useLayoutStore } from '../../stores/layout-store';
 
 export function PluginPanel() {
   const {
     plugins,
     loading,
-    generating,
     error,
-    generateError,
     loadPlugins,
     activate,
     deactivate,
     deletePlugin,
-    generate,
   } = usePluginStore();
 
-  const [pluginName, setPluginName] = useState('');
-  const [pluginDesc, setPluginDesc] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     loadPlugins();
   }, [loadPlugins]);
-
-  const handleGenerate = async () => {
-    const name = pluginName.trim();
-    const desc = pluginDesc.trim();
-    if (!name || !desc) return;
-    const spec = await generate(name, desc);
-    setPluginName('');
-    setPluginDesc('');
-
-    // Offer to open plugin in a new pane
-    if (spec && window.confirm(`Open "${name}" in a new pane?`)) {
-      const pane = useLayoutStore.getState().getFocusedPane();
-      if (pane) {
-        const pluginTab = {
-          id: `plugin-${spec.id}`,
-          type: 'plugin' as const,
-          pluginId: spec.id,
-          sessionId: '',
-          title: name,
-        };
-        useLayoutStore.getState().splitPane(pane.id, 'horizontal');
-        // After split, add tab to the newly created pane (last pane)
-        const panes = useLayoutStore.getState().getAllPanes();
-        const newPane = panes[panes.length - 1];
-        if (newPane) {
-          useLayoutStore.getState().addTabToPane(newPane.id, pluginTab);
-        }
-      }
-    }
-  };
 
   const handleDeleteClick = (name: string) => {
     setDeleteConfirm(name);
@@ -75,35 +39,14 @@ export function PluginPanel() {
         </span>
       </div>
 
-      {/* Plugin generate form */}
-      <div className="px-3 py-2 shrink-0 border-b border-aide-border flex flex-col gap-1.5">
-        <input
-          type="text"
-          placeholder="Plugin name..."
-          value={pluginName}
-          onChange={(e) => setPluginName(e.target.value)}
-          className="w-full px-2 py-1 text-xs font-mono bg-aide-surface-elevated border border-aide-border rounded text-aide-text-primary placeholder-aide-text-tertiary focus:outline-none focus:border-aide-accent"
-        />
-        <input
-          type="text"
-          placeholder="Describe what the plugin does..."
-          value={pluginDesc}
-          onChange={(e) => setPluginDesc(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleGenerate();
-          }}
-          className="w-full px-2 py-1 text-xs font-mono bg-aide-surface-elevated border border-aide-border rounded text-aide-text-primary placeholder-aide-text-tertiary focus:outline-none focus:border-aide-accent"
-        />
-        <button
-          onClick={handleGenerate}
-          disabled={generating || !pluginName.trim() || !pluginDesc.trim()}
-          className="w-full px-2 py-1 text-xs font-mono bg-aide-accent text-black rounded hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-        >
-          {generating ? 'Generating...' : 'Generate Plugin'}
-        </button>
-        {generateError && (
-          <span className="text-[10px] font-mono text-red-400">{generateError}</span>
-        )}
+      {/* Agent-driven plugin creation hint */}
+      <div className="px-3 py-2 shrink-0 border-b border-aide-border">
+        <p className="text-[10px] font-mono text-aide-text-secondary leading-relaxed">
+          Ask your AI agent in the terminal to create plugins.
+          <span className="text-aide-text-tertiary block mt-0.5">
+            e.g. &ldquo;Make a plugin that formats JSON files&rdquo;
+          </span>
+        </p>
       </div>
 
       {/* Plugin list */}
@@ -121,7 +64,7 @@ export function PluginPanel() {
         {!loading && !error && plugins.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 gap-1 text-aide-text-tertiary text-xs font-mono">
             <span>No plugins installed</span>
-            <span className="text-[10px]">Generate one above</span>
+            <span className="text-[10px]">Ask an agent to create one</span>
           </div>
         )}
 

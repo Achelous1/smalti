@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import * as fs from 'fs';
+import { userInfo } from 'os';
 import path from 'path';
 import { fixPackagedEnv } from './fix-env';
 import { registerIpcHandlers } from './ipc/handlers';
@@ -8,6 +10,7 @@ import { registerAgentHandlers } from './ipc/agent-handlers';
 import { registerGitHandlers } from './ipc/git-handlers';
 import { registerGithubHandlers } from './ipc/github-handlers';
 import { registerPluginHandlers } from './ipc/plugin-handlers';
+import { writeMcpConfig } from './mcp/config-writer';
 
 fixPackagedEnv();
 
@@ -62,14 +65,35 @@ const createWindow = (): void => {
 };
 
 app.on('ready', () => {
+  // Ensure global plugin directory exists on startup
+  try {
+    const home = (process.env.HOME && process.env.HOME !== '/') ? process.env.HOME : userInfo().homedir;
+    const globalPluginsDir = path.join(home, '.aide', 'plugins');
+    if (!fs.existsSync(globalPluginsDir)) {
+      fs.mkdirSync(globalPluginsDir, { recursive: true });
+    }
+  } catch (err) {
+    console.error('[AIDE] Plugin directory setup failed (non-fatal):', err);
+  }
   registerIpcHandlers();
   registerWorkspaceHandlers(ipcMain);
   registerFsHandlers(ipcMain, process.cwd());
   registerAgentHandlers(ipcMain);
   registerGitHandlers(ipcMain);
   registerGithubHandlers(ipcMain);
-  registerPluginHandlers(ipcMain);
+  try {
+    registerPluginHandlers(ipcMain, process.cwd());
+  } catch (err) {
+    console.error('[AIDE] Plugin handlers setup failed (non-fatal):', err);
+  }
   createWindow();
+  // MCP setup runs after window creation — failures must not prevent the app from opening
+  try {
+    const mcpHome = (process.env.HOME && process.env.HOME !== '/') ? process.env.HOME : userInfo().homedir;
+    writeMcpConfig(mcpHome);
+  } catch (err) {
+    console.error('[AIDE] MCP setup failed (non-fatal):', err);
+  }
 });
 
 app.on('window-all-closed', () => {

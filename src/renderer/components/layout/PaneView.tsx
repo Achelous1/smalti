@@ -7,6 +7,7 @@ import { AgentDropdown } from '../terminal/AgentDropdown';
 import { PluginView } from '../plugin/PluginView';
 import { EmptyState } from './EmptyState';
 import { useLayoutStore } from '../../stores/layout-store';
+import { useTerminalStore } from '../../stores/terminal-store';
 import type { Pane, TerminalTab } from '../../../types/ipc';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -153,6 +154,7 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
       try { await window.aide.terminal.kill(tab.sessionId); } catch { /* ignore */ }
     }
     removeTabFromPane(pane.id, tab.id);
+    useTerminalStore.getState().removeTab(tab.id);
   }, [pane.id, removeTabFromPane]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, tabId: string) => {
