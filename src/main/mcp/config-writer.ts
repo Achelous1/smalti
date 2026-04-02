@@ -4,8 +4,17 @@
  */
 import { app } from 'electron';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
+
+/** Reliable home directory — getHome() returns '/' when Finder launches without HOME */
+function getHome(): string {
+  const env = process.env.HOME;
+  if (env && env !== '/') return env;
+  try { return os.userInfo().homedir; } catch { /* ignore */ }
+  return app.getPath('home');
+}
 
 function getUserData(): string {
   return app.getPath('userData');
@@ -50,7 +59,7 @@ export function getMcpConfigPath(): string {
 export function getMcpServerPath(): string {
   // Use ~/.aide/ instead of userData — userData path contains "Application Support"
   // which has a space that Claude Code CLI mishandles when spawning the MCP process.
-  return path.join(app.getPath('home'), '.aide', 'aide-mcp-server.js');
+  return path.join(getHome(), '.aide', 'aide-mcp-server.js');
 }
 
 /**
@@ -58,7 +67,7 @@ export function getMcpServerPath(): string {
  * Safe to call multiple times — merges rather than overwrites.
  */
 function registerClaudeGlobalMcp(): void {
-  const home = app.getPath('home');
+  const home = getHome();
   const claudeConfigPath = path.join(home, '.claude.json');
   const globalPluginsDir = path.join(home, '.aide', 'plugins');
 
@@ -86,7 +95,7 @@ function registerClaudeGlobalMcp(): void {
 }
 
 export function writeMcpConfig(workspacePath: string): string {
-  const globalPluginsDir = path.join(app.getPath('home'), '.aide', 'plugins');
+  const globalPluginsDir = path.join(getHome(), '.aide', 'plugins');
   const localPluginsDir = path.join(workspacePath, '.aide', 'plugins');
 
   fs.mkdirSync(globalPluginsDir, { recursive: true });

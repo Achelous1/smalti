@@ -9,8 +9,15 @@ import { PluginRegistry } from '../plugin/registry';
 
 const registry = new PluginRegistry();
 
+function getHome(): string {
+  const env = process.env.HOME;
+  if (env && env !== '/') return env;
+  try { return require('os').userInfo().homedir; } catch { /* ignore */ }
+  return app.getPath('home');
+}
+
 function getGlobalPluginsDir(): string {
-  return path.join(app.getPath('home'), '.aide', 'plugins');
+  return path.join(getHome(), '.aide', 'plugins');
 }
 
 function getLocalPluginsDir(cwd: string): string {

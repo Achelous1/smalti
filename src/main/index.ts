@@ -65,9 +65,14 @@ const createWindow = (): void => {
 
 app.on('ready', () => {
   // Ensure global plugin directory exists on startup
-  const globalPluginsDir = path.join(app.getPath('home'), '.aide', 'plugins');
-  if (!fs.existsSync(globalPluginsDir)) {
-    fs.mkdirSync(globalPluginsDir, { recursive: true });
+  try {
+    const home = (process.env.HOME && process.env.HOME !== '/') ? process.env.HOME : require('os').userInfo().homedir;
+    const globalPluginsDir = path.join(home, '.aide', 'plugins');
+    if (!fs.existsSync(globalPluginsDir)) {
+      fs.mkdirSync(globalPluginsDir, { recursive: true });
+    }
+  } catch (err) {
+    console.error('[AIDE] Plugin directory setup failed (non-fatal):', err);
   }
   registerIpcHandlers();
   registerWorkspaceHandlers(ipcMain);
@@ -75,11 +80,16 @@ app.on('ready', () => {
   registerAgentHandlers(ipcMain);
   registerGitHandlers(ipcMain);
   registerGithubHandlers(ipcMain);
-  registerPluginHandlers(ipcMain, process.cwd());
+  try {
+    registerPluginHandlers(ipcMain, process.cwd());
+  } catch (err) {
+    console.error('[AIDE] Plugin handlers setup failed (non-fatal):', err);
+  }
   createWindow();
   // MCP setup runs after window creation — failures must not prevent the app from opening
   try {
-    writeMcpConfig(app.getPath('home'));
+    const mcpHome = (process.env.HOME && process.env.HOME !== '/') ? process.env.HOME : require('os').userInfo().homedir;
+    writeMcpConfig(mcpHome);
   } catch (err) {
     console.error('[AIDE] MCP setup failed (non-fatal):', err);
   }
