@@ -144,6 +144,21 @@ AIDE의 메인 인터페이스. 모든 상호작용의 시작점.
 - 플러그인이 요구하는 런타임/의존성 자동 설치
 - 타입 제한 없음: 린터, 포매터, 코드 생성기, 자동화 스크립트, UI 컴포넌트 등 무제한
 
+**플러그인 간 통신 (워크스페이스 스코프)**:
+- 플러그인은 현재 워크스페이스에 로드된 다른 플러그인의 도구를 호출할 수 있음 (`aide.plugin.invoke(pluginName, toolName, args)`)
+- 통신 범위는 현재 워크스페이스에 등록된 플러그인으로 한정 (글로벌 플러그인은 워크스페이스에 로드된 경우만 호출 가능)
+- 앱 이벤트 버스를 통해 AIDE UI 이벤트(파일 클릭, 탭 전환 등)를 플러그인이 수신 가능
+- 예시: FILES 탭에서 파일 클릭 → `file-editor` 플러그인의 `open-file` 도구 자동 실행
+
+**장기 비전: Everything-as-Plugin**:
+- AIDE의 모든 핵심 UI를 빌트인 플러그인으로 마이그레이션
+  - `@aide/files` — 파일 탐색기 (현재 FileExplorer)
+  - `@aide/plugins` — 플러그인 관리 패널 (현재 PluginPanel)
+  - `@aide/git` — Git 연동 (현재 GitHubPanel)
+  - `@aide/terminal` — 터미널/에이전트 세션 (현재 TerminalPanel)
+- 빌트인 플러그인과 사용자 플러그인이 동일한 프로토콜(이벤트 버스 + `aide.plugin.invoke`)로 통신
+- AIDE Core는 플러그인 런타임 셸 역할만 담당하고, 모든 기능은 플러그인으로 제공
+
 ### F3. File Explorer
 
 프로젝트 파일 탐색 및 관리.
