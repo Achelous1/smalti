@@ -138,8 +138,7 @@ const PLUGINS_DIR = process.env.AIDE_PLUGINS_DIR || "";
 const WORKSPACE = process.env.AIDE_WORKSPACE || process.cwd();
 
 function send(msg) {
-  const json = JSON.stringify(msg);
-  process.stdout.write("Content-Length: " + Buffer.byteLength(json) + "\\r\\n\\r\\n" + json);
+  process.stdout.write(JSON.stringify(msg) + "\\n");
 }
 function sendResult(id, result) { send({ jsonrpc: "2.0", id, result }); }
 function sendError(id, code, message) { send({ jsonrpc: "2.0", id, error: { code, message } }); }
@@ -259,7 +258,7 @@ function getBuiltinTools() {
 function handleRequest(method, id, params) {
   try {
     if (method === "initialize") {
-      sendResult(id, { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aide", version: "0.1.0" } });
+      sendResult(id, { protocolVersion: params.protocolVersion || "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "aide", version: "0.1.0" } });
     } else if (method === "tools/list") {
       sendResult(id, { tools: getBuiltinTools() });
     } else if (method === "tools/call") {
@@ -287,18 +286,12 @@ function handleRequest(method, id, params) {
 
 let buffer = "";
 function processBuffer() {
-  while (true) {
-    const headerEnd = buffer.indexOf("\\r\\n\\r\\n");
-    if (headerEnd === -1) break;
-    const header = buffer.slice(0, headerEnd);
-    const match = header.match(/Content-Length:\\s*(\\d+)/i);
-    if (!match) { buffer = buffer.slice(headerEnd + 4); continue; }
-    const len = parseInt(match[1], 10);
-    const start = headerEnd + 4;
-    if (buffer.length < start + len) break;
-    const content = buffer.slice(start, start + len);
-    buffer = buffer.slice(start + len);
-    try { const msg = JSON.parse(content); if (msg.method) handleRequest(msg.method, msg.id, msg.params); } catch {}
+  let newline;
+  while ((newline = buffer.indexOf("\\n")) !== -1) {
+    const line = buffer.slice(0, newline).trim();
+    buffer = buffer.slice(newline + 1);
+    if (!line) continue;
+    try { const msg = JSON.parse(line); if (msg.method) handleRequest(msg.method, msg.id, msg.params); } catch {}
   }
 }
 process.stdin.setEncoding("utf-8");
