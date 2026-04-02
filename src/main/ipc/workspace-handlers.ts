@@ -9,6 +9,10 @@ const store = new Store({ name: 'aide-workspaces' });
 
 let activeWorkspacePath: string | null = null;
 
+export function getActiveWorkspacePath(): string | null {
+  return activeWorkspacePath;
+}
+
 const WORKSPACE_COLORS = [
   '#6366f1',
   '#ec4899',

@@ -10,6 +10,7 @@ import { registerAgentHandlers } from './ipc/agent-handlers';
 import { registerGitHandlers } from './ipc/git-handlers';
 import { registerGithubHandlers } from './ipc/github-handlers';
 import { registerPluginHandlers } from './ipc/plugin-handlers';
+import { killAllSessions } from './ipc/terminal-handlers';
 import { writeMcpConfig } from './mcp/config-writer';
 
 fixPackagedEnv();
@@ -81,11 +82,7 @@ app.on('ready', () => {
   registerAgentHandlers(ipcMain);
   registerGitHandlers(ipcMain);
   registerGithubHandlers(ipcMain);
-  try {
-    registerPluginHandlers(ipcMain, process.cwd());
-  } catch (err) {
-    console.error('[AIDE] Plugin handlers setup failed (non-fatal):', err);
-  }
+  registerPluginHandlers(ipcMain, process.cwd());
   createWindow();
   // MCP setup runs after window creation — failures must not prevent the app from opening
   try {
@@ -94,6 +91,10 @@ app.on('ready', () => {
   } catch (err) {
     console.error('[AIDE] MCP setup failed (non-fatal):', err);
   }
+});
+
+app.on('before-quit', () => {
+  killAllSessions();
 });
 
 app.on('window-all-closed', () => {

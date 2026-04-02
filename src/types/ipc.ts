@@ -20,8 +20,8 @@ export interface PluginInfo {
   name: string;
   version: string;
   description: string;
-  enabled: boolean;
   active: boolean;
+  scope: 'local' | 'global';
   tools: PluginTool[];
 }
 
