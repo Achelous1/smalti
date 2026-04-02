@@ -29,6 +29,50 @@ export function PluginPanel() {
   };
 
   const activeCount = plugins.filter((p) => p.active).length;
+  const localPlugins = plugins.filter((p) => p.scope === 'local');
+  const globalPlugins = plugins.filter((p) => p.scope === 'global');
+
+  const renderPlugin = (plugin: typeof plugins[number]) => (
+    <div
+      key={plugin.id}
+      className="flex items-start gap-2 px-2 py-2 rounded bg-aide-surface-elevated"
+    >
+      <div className="flex flex-col flex-1 min-w-0">
+        <span className="text-xs font-mono text-aide-text-primary truncate">
+          {plugin.name}
+        </span>
+        {plugin.description && (
+          <span className="text-[10px] text-aide-text-secondary truncate">
+            {plugin.description}
+          </span>
+        )}
+        <span className="text-[10px] text-aide-text-tertiary">
+          v{plugin.version}
+        </span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0 pt-0.5">
+        <button
+          onClick={() =>
+            plugin.active ? deactivate(plugin.id) : activate(plugin.id)
+          }
+          className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+            plugin.active
+              ? 'bg-aide-accent text-black'
+              : 'bg-aide-border text-aide-text-secondary hover:text-aide-text-primary'
+          }`}
+        >
+          {plugin.active ? 'ON' : 'OFF'}
+        </button>
+        <button
+          onClick={() => handleDeleteClick(plugin.name)}
+          className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aide-text-tertiary hover:text-red-400 hover:bg-red-400/10 transition-colors"
+          title="Delete plugin"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -69,48 +113,23 @@ export function PluginPanel() {
         )}
 
         {!loading && plugins.length > 0 && (
-          <div className="flex flex-col gap-1 px-2 py-2">
-            {plugins.map((plugin) => (
-              <div
-                key={plugin.id}
-                className="flex items-start gap-2 px-2 py-2 rounded bg-aide-surface-elevated"
-              >
-                <div className="flex flex-col flex-1 min-w-0">
-                  <span className="text-xs font-mono text-aide-text-primary truncate">
-                    {plugin.name}
-                  </span>
-                  {plugin.description && (
-                    <span className="text-[10px] text-aide-text-secondary truncate">
-                      {plugin.description}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-aide-text-tertiary">
-                    v{plugin.version}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                  <button
-                    onClick={() =>
-                      plugin.active ? deactivate(plugin.id) : activate(plugin.id)
-                    }
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
-                      plugin.active
-                        ? 'bg-aide-accent text-black'
-                        : 'bg-aide-border text-aide-text-secondary hover:text-aide-text-primary'
-                    }`}
-                  >
-                    {plugin.active ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(plugin.name)}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aide-text-tertiary hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                    title="Delete plugin"
-                  >
-                    ×
-                  </button>
-                </div>
+          <div className="flex flex-col gap-3 px-2 py-2">
+            {localPlugins.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-widest text-aide-text-tertiary font-mono px-1 pb-0.5">
+                  Local
+                </span>
+                {localPlugins.map(renderPlugin)}
               </div>
-            ))}
+            )}
+            {globalPlugins.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-widest text-aide-text-tertiary font-mono px-1 pb-0.5">
+                  Global
+                </span>
+                {globalPlugins.map(renderPlugin)}
+              </div>
+            )}
           </div>
         )}
       </div>

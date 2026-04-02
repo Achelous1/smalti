@@ -7,6 +7,7 @@ import { generatePluginSpec } from '../plugin/spec-generator';
 import type { PluginSpec } from '../plugin/spec-generator';
 import { generatePluginCode } from '../plugin/code-generator';
 import { PluginRegistry } from '../plugin/registry';
+import { getActiveWorkspacePath } from './workspace-handlers';
 
 const registry = new PluginRegistry();
 
@@ -35,7 +36,7 @@ function readPluginSpec(pluginDir: string): PluginSpec | null {
   }
 }
 
-function loadDirIntoRegistry(dir: string): void {
+function loadDirIntoRegistry(dir: string, scope: 'local' | 'global'): void {
   if (!fs.existsSync(dir)) return;
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -43,7 +44,7 @@ function loadDirIntoRegistry(dir: string): void {
     const pluginDir = path.join(dir, entry.name);
     const spec = readPluginSpec(pluginDir);
     if (spec && !registry.get(spec.id)) {
-      registry.register(spec, pluginDir);
+      registry.register(spec, pluginDir, scope);
     }
   }
 }
@@ -59,10 +60,15 @@ function ensurePluginsDirs(cwd: string): void {
   } catch { /* non-fatal */ }
 }
 
+// 활성 워크스페이스 경로를 반환 — 없으면 시작 시 cwd로 폴백
+function getEffectiveCwd(fallbackCwd: string): string {
+  return getActiveWorkspacePath() ?? fallbackCwd;
+}
+
 function loadRegistryFromDisk(cwd: string): void {
   ensurePluginsDirs(cwd);
-  loadDirIntoRegistry(getGlobalPluginsDir());
-  loadDirIntoRegistry(getLocalPluginsDir(cwd));
+  loadDirIntoRegistry(getGlobalPluginsDir(), 'global');
+  loadDirIntoRegistry(getLocalPluginsDir(cwd), 'local');
 }
 
 export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
@@ -75,13 +81,14 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
 
   // Full pipeline: natural language → spec → code → register (with cleanup on failure)
   ipcMain.handle(IPC_CHANNELS.PLUGIN_GENERATE, async (_event, name: string, description: string) => {
-    ensurePluginsDirs(cwd);
-    const localDir = getLocalPluginsDir(cwd);
+    const effectiveCwd = getEffectiveCwd(cwd);
+    ensurePluginsDirs(effectiveCwd);
+    const localDir = getLocalPluginsDir(effectiveCwd);
     const spec = generatePluginSpec(name, description);
     const pluginDir = path.join(localDir, spec.name);
     try {
       generatePluginCode(spec, pluginDir);
-      registry.register(spec, pluginDir);
+      registry.register(spec, pluginDir, 'local');
     } catch (err) {
       // Cleanup orphaned files on pipeline failure
       if (fs.existsSync(pluginDir)) {
@@ -93,11 +100,14 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.PLUGIN_LIST, async () => {
+    // 활성 워크스페이스가 바뀌었을 수 있으므로 로컬 플러그인을 다시 스캔
+    const effectiveCwd = getEffectiveCwd(cwd);
+    loadDirIntoRegistry(getLocalPluginsDir(effectiveCwd), 'local');
     return registry.list();
   });
 
   ipcMain.handle(IPC_CHANNELS.PLUGIN_ACTIVATE, async (_event, pluginId: string, workspacePath?: string) => {
-    const activeCwd = workspacePath || cwd;
+    const activeCwd = workspacePath || getEffectiveCwd(cwd);
     const exports = registry.activate(pluginId, activeCwd);
     return { id: pluginId, active: exports !== null };
   });
@@ -108,15 +118,16 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.PLUGIN_INVOKE, async (_event, pluginId: string, toolName: string, args: Record<string, unknown>) => {
+    const effectiveCwd = getEffectiveCwd(cwd);
     const plugin = registry.get(pluginId);
     if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
     if (!plugin.active) {
-      registry.activate(pluginId, cwd);
+      registry.activate(pluginId, effectiveCwd);
     }
     // Re-read after activation — sandbox exports are on the module
     const activated = registry.get(pluginId);
     if (!activated?.sandbox) throw new Error(`Plugin ${pluginId} failed to activate`);
-    const exports = activated.sandbox.run(cwd);
+    const exports = activated.sandbox.run(effectiveCwd);
     if (typeof (exports as Record<string, unknown>).invoke !== 'function') {
       throw new Error(`Plugin ${pluginId} does not export an invoke function`);
     }
@@ -134,8 +145,9 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.PLUGIN_DELETE, async (_event, pluginName: string) => {
+    const effectiveCwd = getEffectiveCwd(cwd);
     // Search local first, then global
-    const localDir = getLocalPluginsDir(cwd);
+    const localDir = getLocalPluginsDir(effectiveCwd);
     const globalDir = getGlobalPluginsDir();
 
     let pluginDir = path.join(localDir, pluginName);

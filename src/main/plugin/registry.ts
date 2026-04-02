@@ -8,6 +8,7 @@ interface RegisteredPlugin {
   sandbox: PluginSandbox | null;
   active: boolean;
   pluginDir: string;
+  scope: 'local' | 'global';
 }
 
 interface RegisteredTool {
@@ -19,12 +20,13 @@ export class PluginRegistry {
   private plugins: Map<string, RegisteredPlugin> = new Map();
   private tools: Map<string, RegisteredTool> = new Map();
 
-  register(spec: PluginSpec, pluginDir: string): void {
+  register(spec: PluginSpec, pluginDir: string, scope: 'local' | 'global' = 'local'): void {
     this.plugins.set(spec.id, {
       spec,
       sandbox: new PluginSandbox(pluginDir, spec),
       active: false,
       pluginDir,
+      scope,
     });
   }
 
@@ -59,10 +61,11 @@ export class PluginRegistry {
     return true;
   }
 
-  list(): Array<PluginSpec & { active: boolean }> {
+  list(): Array<PluginSpec & { active: boolean; scope: 'local' | 'global' }> {
     return Array.from(this.plugins.values()).map((p) => ({
       ...p.spec,
       active: p.active,
+      scope: p.scope,
     }));
   }
 
