@@ -36,6 +36,15 @@ export const IPC_CHANNELS = {
   PLUGIN_INVOKE: 'plugin:invoke',
   PLUGIN_GET_HTML: 'plugin:get-html',
 
+  // Settings
+  SETTINGS_READ: 'settings:read',
+  SETTINGS_WRITE: 'settings:write',
+
+  // Files (main → renderer push)
+  FILES_REVEAL: 'files:reveal',
+  FILES_SELECT: 'files:select',
+  FILES_REFRESH: 'files:refresh',
+
   // MCP
   MCP_STATUS: 'mcp:status',
   MCP_TOOLS: 'mcp:tools',

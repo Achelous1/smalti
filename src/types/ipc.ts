@@ -149,6 +149,18 @@ export interface PluginInvokeResult {
   error?: string;
 }
 
+/** A single event → tool binding in .aide/settings.json */
+export interface EventBinding {
+  plugin: string;
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+/** Workspace-level settings stored in {workspace}/.aide/settings.json */
+export interface WorkspaceSettings {
+  eventBindings: Partial<Record<'file:clicked' | 'file:right-clicked', EventBinding[]>>;
+}
+
 /** MCP server status */
 export interface McpStatus {
   running: boolean;
@@ -207,6 +219,15 @@ export interface AideAPI {
   mcp: {
     status(): Promise<McpStatus>;
     tools(): Promise<PluginTool[]>;
+  };
+  settings: {
+    read(): Promise<WorkspaceSettings>;
+    write(settings: WorkspaceSettings): Promise<void>;
+  };
+  files: {
+    onReveal(callback: (filePath: string) => void): () => void;
+    onSelect(callback: (filePath: string) => void): () => void;
+    onRefresh(callback: () => void): () => void;
   };
   github: {
     listPRs(owner: string, repo: string): Promise<GithubPR[]>;

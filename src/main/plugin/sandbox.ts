@@ -1,7 +1,14 @@
 import * as vm from 'vm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { BrowserWindow } from 'electron';
+import { IPC_CHANNELS } from '../ipc/channels';
 import type { PluginSpec } from './spec-generator';
+
+function sendToRenderer(channel: string, payload?: unknown): void {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.webContents.send(channel, payload);
+}
 
 export class PluginSandbox {
   private context: vm.Context | null = null;
@@ -120,6 +127,11 @@ export class PluginSandbox {
           id: this.spec.id,
           name: this.spec.name,
           version: this.spec.version,
+        },
+        files: {
+          reveal: (filePath: string) => sendToRenderer(IPC_CHANNELS.FILES_REVEAL, filePath),
+          select: (filePath: string) => sendToRenderer(IPC_CHANNELS.FILES_SELECT, filePath),
+          refresh: () => sendToRenderer(IPC_CHANNELS.FILES_REFRESH),
         },
       },
     };
