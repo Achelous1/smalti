@@ -69,6 +69,26 @@ export function registerPluginScheme(): void {
 }
 
 /**
+ * window.aide shim injected into every plugin iframe.
+ * Provides on(), invoke(), emit(), and theme listener.
+ * Injected by the protocol handler so ALL plugins get it automatically —
+ * no manual inclusion needed in custom HTML.
+ */
+const AIDE_SHIM = `<script>window.aide=(function(){var _cid=0,_cbs={};window.addEventListener("message",function(e){if(e.data&&e.data.type==="aide:file-event"){var h=_cbs[e.data.event];if(h)h.forEach(function(cb){cb(e.data);});}if(e.data&&e.data.type==="aide:invoke-result"&&_cbs["r"+e.data.callId]){_cbs["r"+e.data.callId](e.data.result);delete _cbs["r"+e.data.callId];delete _cbs["j"+e.data.callId];}if(e.data&&e.data.type==="aide:invoke-error"&&_cbs["j"+e.data.callId]){_cbs["j"+e.data.callId](new Error(e.data.error));delete _cbs["r"+e.data.callId];delete _cbs["j"+e.data.callId];}if(e.data&&e.data.theme){document.documentElement.className=e.data.theme;}});return{on:function(event,cb){if(!_cbs[event])_cbs[event]=[];_cbs[event].push(cb);},emit:function(){},invoke:function(plugin,tool,args){var id=++_cid;return new Promise(function(resolve,reject){_cbs["r"+id]=resolve;_cbs["j"+id]=reject;parent.postMessage({type:"aide:invoke",callId:id,plugin:plugin,tool:tool,args:args||{}},"*");});}};})();</script>`;
+
+/**
+ * Inject the aide shim into HTML just before </head>.
+ * If no </head> tag, prepend to the HTML.
+ */
+function injectShim(html: string): string {
+  const headClose = html.indexOf('</head>');
+  if (headClose !== -1) {
+    return html.slice(0, headClose) + AIDE_SHIM + html.slice(headClose);
+  }
+  return AIDE_SHIM + html;
+}
+
+/**
  * Must be called AFTER app.whenReady() — installs the request handler.
  */
 export function registerPluginProtocol(cwd: string): void {
@@ -83,7 +103,7 @@ export function registerPluginProtocol(cwd: string): void {
         headers: { 'Content-Type': 'text/plain' },
       });
     }
-    return new Response(html, {
+    return new Response(injectShim(html), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   });
