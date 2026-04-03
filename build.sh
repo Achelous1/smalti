@@ -10,19 +10,86 @@ if ! command -v pnpm &> /dev/null; then
   exit 1
 fi
 
+# Detect arch
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+  APP_DIR="out/AIDE-darwin-arm64"
+else
+  APP_DIR="out/AIDE-darwin-x64"
+fi
+
+APP_PATH="$APP_DIR/AIDE.app"
+DMG_NAME="AIDE"
+DMG_PATH="out/AIDE.dmg"
+DMG_TMP_PATH="out/AIDE-tmp.dmg"
+
 # Install dependencies
-echo "[1/3] Installing dependencies..."
+echo "[1/4] Installing dependencies..."
 pnpm install
 
 # Lint
-echo "[2/3] Running lint..."
-pnpm lint
+echo "[2/4] Running lint..."
+pnpm run lint
 
-# Build DMG
-echo "[3/3] Building DMG..."
-pnpm run make
+# Package app
+echo "[3/4] Packaging app..."
+pnpm run package
+
+# Create DMG with drag-and-drop installer layout
+echo "[4/4] Creating DMG..."
+rm -f "$DMG_PATH" "$DMG_TMP_PATH"
+
+# Staging: app + /Applications symlink
+STAGING=$(mktemp -d)
+cp -R "$APP_PATH" "$STAGING/"
+ln -s /Applications "$STAGING/Applications"
+
+# Create a writable DMG first (so we can set icon layout via AppleScript)
+hdiutil create \
+  -volname "$DMG_NAME" \
+  -srcfolder "$STAGING" \
+  -ov \
+  -format UDRW \
+  "$DMG_TMP_PATH"
+
+rm -rf "$STAGING"
+
+# Mount the writable DMG
+MOUNT_DIR="/Volumes/$DMG_NAME"
+hdiutil attach "$DMG_TMP_PATH" -mountpoint "$MOUNT_DIR" -noautoopen -quiet
+
+# Wait for Finder to register the volume
+sleep 3
+
+# Set icon positions and window layout via AppleScript
+osascript <<EOF
+tell application "Finder"
+  tell disk "$DMG_NAME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {400, 100, 900, 430}
+    set viewOptions to the icon view options of container window
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 100
+    set position of item "AIDE.app" of container window to {125, 160}
+    set position of item "Applications" of container window to {375, 160}
+    close
+    open
+    update without registering applications
+    delay 2
+  end tell
+end tell
+EOF
+
+# Unmount
+hdiutil detach "$MOUNT_DIR" -quiet
+
+# Convert to compressed read-only DMG
+hdiutil convert "$DMG_TMP_PATH" -format UDZO -o "$DMG_PATH"
+rm -f "$DMG_TMP_PATH"
 
 echo ""
 echo "Build complete!"
-echo "Output: out/make/"
-ls out/make/ 2>/dev/null || true
+echo "Output: $DMG_PATH"
