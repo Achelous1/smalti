@@ -58,7 +58,13 @@ export class PluginRegistry {
   }
 
   invokeTool(pluginId: string, toolName: string, args: Record<string, unknown>, workspacePath: string): unknown {
-    const plugin = this.plugins.get(pluginId);
+    // Look up by ID first, then by name (event bindings use name, direct IPC calls use ID)
+    let plugin = this.plugins.get(pluginId);
+    if (!plugin) {
+      for (const p of this.plugins.values()) {
+        if (p.spec.name === pluginId) { plugin = p; break; }
+      }
+    }
     if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
     if (!plugin.sandbox) throw new Error(`Plugin ${pluginId} has no sandbox`);
     if (!plugin.active) {
