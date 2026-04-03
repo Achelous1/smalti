@@ -156,9 +156,16 @@ export interface EventBinding {
   args: Record<string, unknown>;
 }
 
+/** Emit permissions for a plugin in .aide/settings.json */
+export interface PluginPermissions {
+  emit: string[];
+}
+
 /** Workspace-level settings stored in {workspace}/.aide/settings.json */
 export interface WorkspaceSettings {
   eventBindings: Partial<Record<'file:clicked' | 'file:right-clicked', EventBinding[]>>;
+  pluginBindings: Record<string, EventBinding[]>;
+  pluginPermissions: Record<string, PluginPermissions>;
 }
 
 /** MCP server status */
