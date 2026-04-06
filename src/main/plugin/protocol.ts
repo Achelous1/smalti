@@ -13,16 +13,9 @@
  */
 import { protocol } from 'electron';
 import * as fs from 'fs';
-import { userInfo } from 'os';
 import * as path from 'path';
 import { getActiveWorkspacePath } from '../ipc/workspace-handlers';
-
-function getHome(): string {
-  const env = process.env.HOME;
-  if (env && env !== '/') return env;
-  try { return userInfo().homedir; } catch { /* ignore */ }
-  return '/tmp';
-}
+import { getHome } from '../utils/home';
 
 /**
  * Scan local + global plugin directories for a plugin matching `pluginId`
@@ -59,10 +52,14 @@ function findPluginHtml(pluginId: string, fallbackCwd: string): string | null {
  * Must be called BEFORE app.whenReady() — registers the scheme as privileged
  * so Chromium treats it like https:// (standard URL parsing, secure context).
  */
-export function registerPluginScheme(): void {
+export function registerCustomSchemes(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: 'aide-plugin',
+      privileges: { standard: true, secure: true, supportFetchAPI: true },
+    },
+    {
+      scheme: 'aide-cdn',
       privileges: { standard: true, secure: true, supportFetchAPI: true },
     },
   ]);
