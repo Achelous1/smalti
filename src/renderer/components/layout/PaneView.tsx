@@ -30,7 +30,7 @@ interface DraggableTabProps {
 }
 
 function DraggableTab({ tab, paneId, isActive, onActivate, onClose, onContextMenu, canClose }: DraggableTabProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: tab.id,
     data: { tab, paneId },
   });
@@ -44,42 +44,49 @@ function DraggableTab({ tab, paneId, isActive, onActivate, onClose, onContextMen
   };
 
   return (
-    <button
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      onClick={onActivate}
-      onContextMenu={onContextMenu}
-      className={`group relative flex items-center gap-1.5 px-3 h-full text-[12px] font-mono transition-colors ${
-        isActive
-          ? 'bg-aide-tab-active-bg text-aide-text-primary'
-          : 'bg-aide-tab-inactive-bg text-aide-text-secondary hover:text-aide-text-primary'
-      }`}
-    >
-      {isActive && (
-        <span className="absolute top-0 left-0 right-0 h-[2px]" style={{ backgroundColor: 'var(--accent)' }} />
+    <div className="relative flex items-stretch h-full">
+      {/* Insert position indicator — 2px blue vertical line on the left when a tab is dragged over */}
+      {isOver && !isDragging && (
+        <span className="drag-insert-line" />
       )}
-      {isPlugin ? (
-        <span className="text-[12px] shrink-0" style={{ color: 'var(--accent)' }}>◈</span>
-      ) : (
-        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
-      )}
-      <span>{tab.title}</span>
-      {canClose && (
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={onClose}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') onClose(e as unknown as React.MouseEvent);
-          }}
-          className="ml-1 opacity-0 group-hover:opacity-100 text-[10px] text-aide-text-tertiary hover:text-aide-text-primary transition-opacity leading-none"
-        >
-          ×
-        </span>
-      )}
-    </button>
+      <button
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        onClick={onActivate}
+        onContextMenu={onContextMenu}
+        className={`group relative flex items-center gap-1.5 px-3 h-full text-[12px] font-mono transition-colors ${
+          isActive
+            ? 'bg-aide-tab-active-bg text-aide-text-primary'
+            : 'bg-aide-tab-inactive-bg text-aide-text-secondary hover:text-aide-text-primary'
+        } ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      >
+        {isActive && (
+          <span className="absolute top-0 left-0 right-0 h-[2px]" style={{ backgroundColor: 'var(--accent)' }} />
+        )}
+        <span className="drag-handle-icon">⠿</span>
+        {isPlugin ? (
+          <span className="text-[12px] shrink-0" style={{ color: 'var(--accent)' }}>◈</span>
+        ) : (
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+        )}
+        <span>{tab.title}</span>
+        {canClose && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={onClose}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') onClose(e as unknown as React.MouseEvent);
+            }}
+            className="ml-1 opacity-0 group-hover:opacity-100 text-[10px] text-aide-text-tertiary hover:text-aide-text-primary transition-opacity leading-none"
+          >
+            ×
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -110,6 +117,7 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
   // Edge detection for drag-to-split
   type DropEdge = 'left' | 'right' | 'top' | 'bottom' | 'center' | null;
   const [dropEdge, setDropEdge] = useState<DropEdge>(null);
+  const [draggingSourcePaneId, setDraggingSourcePaneId] = useState<string | null>(null);
   const dropAreaRef = useRef<HTMLDivElement>(null);
 
   // Droppable zone for cross-pane drops
@@ -124,8 +132,12 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
     (dropAreaRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
   }, [setDropRef]);
 
-  // Track mouse position during drag to detect edge
+  // Track mouse position during drag to detect edge, and source pane for cross-pane detection
   useDndMonitor({
+    onDragStart(event) {
+      const sourcePaneId = event.active.data.current?.paneId as string | undefined;
+      setDraggingSourcePaneId(sourcePaneId ?? null);
+    },
     onDragMove(event) {
       if (!isOver || !dropAreaRef.current) { setDropEdge(null); return; }
       const rect = dropAreaRef.current.getBoundingClientRect();
@@ -141,9 +153,11 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
       else if (relY > 0.7) setDropEdge('bottom');
       else setDropEdge('center');
     },
-    onDragEnd() { setDropEdge(null); },
-    onDragCancel() { setDropEdge(null); },
+    onDragEnd() { setDropEdge(null); setDraggingSourcePaneId(null); },
+    onDragCancel() { setDropEdge(null); setDraggingSourcePaneId(null); },
   });
+
+  const isCrossPaneDrag = draggingSourcePaneId !== null && draggingSourcePaneId !== pane.id;
 
   const isFocused = focusedPaneId === pane.id;
   const activeTab = pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0];
@@ -232,21 +246,27 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
 
       {/* Content area — also a drop zone */}
       <div ref={setDropRefs} data-pane-drop={pane.id} className="flex-1 overflow-hidden relative">
-        {isOver && dropEdge && (
+        {/* Cross-pane center drop overlay */}
+        {isOver && isCrossPaneDrag && dropEdge === 'center' && (
+          <div className="drag-drop-overlay">
+            <span className="drag-drop-overlay__text">◈ Drop tab here</span>
+          </div>
+        )}
+        {/* Edge split preview overlay */}
+        {isOver && dropEdge && dropEdge !== 'center' && (
           <div
             className="absolute z-30 flex items-center justify-center pointer-events-none rounded-sm"
             style={{
-              backgroundColor: dropEdge === 'center' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.08)',
+              backgroundColor: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
               ...(dropEdge === 'left' ? { top: 4, left: 4, bottom: 4, width: 'calc(50% - 6px)' } :
                  dropEdge === 'right' ? { top: 4, right: 4, bottom: 4, width: 'calc(50% - 6px)' } :
                  dropEdge === 'top' ? { top: 4, left: 4, right: 4, height: 'calc(50% - 6px)' } :
-                 dropEdge === 'bottom' ? { bottom: 4, left: 4, right: 4, height: 'calc(50% - 6px)' } :
-                 { top: 4, left: 4, right: 4, bottom: 4 }),
+                 { bottom: 4, left: 4, right: 4, height: 'calc(50% - 6px)' }),
             }}
           >
-            <span className="text-aide-text-tertiary text-[12px] font-mono">
-              {dropEdge === 'center' ? 'Move here' :
-               dropEdge === 'left' ? '← Split Left' :
+            <span className="text-[12px] font-mono" style={{ color: '#3B82F6' }}>
+              {dropEdge === 'left' ? '← Split Left' :
                dropEdge === 'right' ? 'Split Right →' :
                dropEdge === 'top' ? '↑ Split Top' : 'Split Bottom ↓'}
             </span>
