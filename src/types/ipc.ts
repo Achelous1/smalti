@@ -195,7 +195,6 @@ export interface SerializableSplitLayout {
 
 export interface SavedTab {
   id: string;
-  paneId: string;
   type: 'agent' | 'shell' | 'plugin';
   title: string;
   isActive: boolean;

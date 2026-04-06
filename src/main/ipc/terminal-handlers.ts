@@ -19,11 +19,12 @@ function getResumeArgs(agentType: string, sessionId: string): string[] {
 function parseAgentSessionId(agentType: string, data: string): string | null {
   switch (agentType) {
     case 'claude': {
-      const match = data.match(/session:\s*([a-f0-9-]{8,})/i);
+      // Claude session IDs are ULIDs (26-char Crockford Base32)
+      const match = data.match(/session[:\s]+([0-9A-HJKMNP-TV-Z]{26})\b/i);
       return match ? match[1] : null;
     }
     case 'gemini': {
-      const match = data.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+      const match = data.match(/session[:\s]+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
       return match ? match[1] : null;
     }
     case 'codex': {

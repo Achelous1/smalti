@@ -126,6 +126,7 @@ interface LayoutState {
   setActiveTab: (paneId: string, tabId: string) => void;
   moveTab: (fromPaneId: string, toPaneId: string, tabId: string) => void;
   reorderTab: (paneId: string, fromIndex: number, toIndex: number) => void;
+  updateTabAgentSessionId: (ptySessionId: string, agentSessionId: string) => void;
 
   // Resize
   resizePanes: (splitId: string, sizes: number[]) => void;
@@ -453,6 +454,21 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     });
   },
 
+  updateTabAgentSessionId: (ptySessionId, agentSessionId) => {
+    set((state) => {
+      const layout = cloneNode(state.layout);
+      const allPanes = collectPanes(layout);
+      for (const pane of allPanes) {
+        const tab = pane.tabs.find((t) => t.sessionId === ptySessionId);
+        if (tab) {
+          tab.agentSessionId = agentSessionId;
+          return { layout };
+        }
+      }
+      return state;
+    });
+  },
+
   resizePanes: (splitId, sizes) => {
     set((state) => {
       const layout = cloneNode(state.layout);
@@ -509,7 +525,6 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       const pane = node as Pane;
       const tabs: SavedTab[] = pane.tabs.map((tab) => ({
         id: tab.id,
-        paneId: pane.id,
         type: tab.type,
         title: tab.title,
         isActive: tab.id === pane.activeTabId,
@@ -619,6 +634,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
               id: savedTab.id,
               type: savedTab.type,
               agentId: savedTab.agentId,
+              agentSessionId: savedTab.agentSessionId,
               sessionId,
               title: savedTab.title,
             };

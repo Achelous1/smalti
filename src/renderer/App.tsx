@@ -46,17 +46,19 @@ export function App() {
 
   // Track agent session IDs for resume support
   useEffect(() => {
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
     const unsub = window.aide.terminal.onAgentSessionId((sessionId, agentSessionId) => {
-      const panes = useLayoutStore.getState().getAllPanes();
-      for (const pane of panes) {
-        const tab = pane.tabs.find(t => t.sessionId === sessionId);
-        if (tab) {
-          tab.agentSessionId = agentSessionId;
-          break;
-        }
-      }
+      useLayoutStore.getState().updateTabAgentSessionId(sessionId, agentSessionId);
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        const wsId = useWorkspaceStore.getState().activeWorkspaceId;
+        if (wsId) useLayoutStore.getState().saveSession(wsId);
+      }, 250);
     });
-    return unsub;
+    return () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      unsub();
+    };
   }, []);
 
   // PaneView auto-spawns a shell when empty — no App-level auto-create needed
