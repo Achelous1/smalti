@@ -45,6 +45,7 @@ cp -R "$APP_PATH" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
 
 # Create a writable DMG first (so we can set icon layout via AppleScript)
+echo "  Creating writable DMG..."
 hdiutil create \
   -volname "$DMG_NAME" \
   -srcfolder "$STAGING" \
@@ -55,14 +56,20 @@ hdiutil create \
 rm -rf "$STAGING"
 
 # Mount the writable DMG
+echo "  Mounting DMG for layout customization..."
 MOUNT_DIR="/Volumes/$DMG_NAME"
+# Detach any existing mount first (stale leftover from a previous failed run)
+hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
 hdiutil attach "$DMG_TMP_PATH" -mountpoint "$MOUNT_DIR" -noautoopen -quiet
 
 # Wait for Finder to register the volume
 sleep 3
 
-# Set icon positions and window layout via AppleScript
-osascript <<EOF
+# Set icon positions and window layout via AppleScript.
+# Finder automation may be blocked by macOS privacy settings on first run —
+# if it fails, skip the layout step and continue with a plain DMG.
+echo "  Applying icon layout (AppleScript Finder automation)..."
+if ! osascript <<EOF
 tell application "Finder"
   tell disk "$DMG_NAME"
     open
@@ -82,11 +89,18 @@ tell application "Finder"
   end tell
 end tell
 EOF
+then
+  echo "  ⚠️  AppleScript layout failed (Finder automation may be blocked)."
+  echo "      Grant permission: System Settings → Privacy & Security → Automation → Terminal → Finder"
+  echo "      Continuing without custom layout..."
+fi
 
-# Unmount
-hdiutil detach "$MOUNT_DIR" -quiet
+# Unmount (force if necessary)
+echo "  Unmounting DMG..."
+hdiutil detach "$MOUNT_DIR" -quiet || hdiutil detach "$MOUNT_DIR" -force -quiet
 
 # Convert to compressed read-only DMG
+echo "  Converting to compressed DMG..."
 hdiutil convert "$DMG_TMP_PATH" -format UDZO -o "$DMG_PATH"
 rm -f "$DMG_TMP_PATH"
 
