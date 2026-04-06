@@ -4,6 +4,7 @@ import { useAgentStore } from '../../stores/agent-store';
 import { useTerminalStore } from '../../stores/terminal-store';
 import { useLayoutStore } from '../../stores/layout-store';
 import { isSplitLayout, type AgentStatus, type GitStatus, type LayoutNode, type TerminalTab } from '../../../types/ipc';
+import { StatusDot, StatusBadge } from './StatusIndicator';
 
 /** Recursively collect all tabs from a layout tree (source of truth for visible tabs). */
 function collectPaneTabs(node: LayoutNode): TerminalTab[] {
@@ -11,67 +12,6 @@ function collectPaneTabs(node: LayoutNode): TerminalTab[] {
     return node.children.flatMap(collectPaneTabs);
   }
   return node.tabs;
-}
-
-/** Three bouncing dots with phase-offset animation (typing indicator) */
-function BouncingDots({ color, size = 3 }: { color: string; size?: number }) {
-  return (
-    <span className="inline-flex items-end gap-[1px]" style={{ height: size + 3 }}>
-      <span className="dot-bounce rounded-full" style={{ width: size, height: size, backgroundColor: color }} />
-      <span className="dot-bounce rounded-full" style={{ width: size, height: size, backgroundColor: color }} />
-      <span className="dot-bounce rounded-full" style={{ width: size, height: size, backgroundColor: color }} />
-    </span>
-  );
-}
-
-function StatusDot({ status }: { status: AgentStatus }) {
-  // key={status} forces remount on change → re-triggers the ding animation
-  if (status === 'idle') {
-    return (
-      <span key="idle" className="status-ding text-[10px] leading-none" style={{ color: '#3B82F6' }}>●</span>
-    );
-  }
-  if (status === 'processing') {
-    return (
-      <span key="processing" className="status-ding inline-flex items-center leading-none">
-        <BouncingDots color="#F59E0B" size={3} />
-      </span>
-    );
-  }
-  // awaiting-input
-  return (
-    <span key="awaiting" className="status-ding text-[10px] leading-none font-bold" style={{ color: '#F59E0B' }}>?</span>
-  );
-}
-
-function StatusBadge({ status }: { status: AgentStatus }) {
-  if (status === 'idle') {
-    return (
-      <span
-        key="idle"
-        className="status-ding absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#3B82F6] border border-aide-surface-elevated"
-      />
-    );
-  }
-  if (status === 'processing') {
-    return (
-      <span
-        key="processing"
-        className="status-ding absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F59E0B] border border-aide-surface-elevated flex items-center justify-center"
-      >
-        <BouncingDots color="#000" size={2} />
-      </span>
-    );
-  }
-  // awaiting-input
-  return (
-    <span
-      key="awaiting"
-      className="status-ding absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#F59E0B] border border-aide-surface-elevated flex items-center justify-center"
-    >
-      <span className="text-[7px] text-black font-bold leading-none">?</span>
-    </span>
-  );
 }
 
 export function WorkspaceNav() {
@@ -114,14 +54,6 @@ export function WorkspaceNav() {
     return () => clearInterval(interval);
   }, [workspaces]);
 
-  // Derive a representative status per workspace (first session found)
-  const getWorkspaceStatus = (workspaceId: string): AgentStatus | null => {
-    const entry = Object.entries(sessionStatuses).find(([id]) =>
-      id.startsWith(workspaceId)
-    );
-    return entry ? entry[1] : null;
-  };
-
   // Get tabs for a given workspace (active: from layout tree; inactive: from saved snapshot).
   // Excludes plugin tabs and sorts alphabetically by title.
   const getTabsForWorkspace = (workspaceId: string): TerminalTab[] => {
@@ -132,6 +64,20 @@ export function WorkspaceNav() {
       .filter((t) => t.type !== 'plugin')
       .slice()
       .sort((a, b) => a.title.localeCompare(b.title));
+  };
+
+  // Derive a representative status per workspace from the tabs belonging to it.
+  // sessionStatuses is keyed by PTY session ID (term-N), not workspace ID,
+  // so we collect the workspace's tab sessionIds and look each one up.
+  const getWorkspaceStatus = (workspaceId: string): AgentStatus | null => {
+    const tabs = getTabsForWorkspace(workspaceId);
+    for (const tab of tabs) {
+      if (!tab.sessionId) continue;
+      const s = sessionStatuses[tab.sessionId];
+      if (s && s !== 'idle') return s;
+    }
+    // Fall back to idle only if at least one tab exists
+    return tabs.length > 0 ? 'idle' : null;
   };
 
   const getActiveTabIdForWorkspace = (workspaceId: string) => {
