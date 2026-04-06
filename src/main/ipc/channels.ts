@@ -63,6 +63,7 @@ export const IPC_CHANNELS = {
   AGENT_LIST_INSTALLED: 'agent:list-installed',
   AGENT_DETECT: 'agent:detect',
   AGENT_STATUS: 'agent:status',
+  AGENT_SESSION_ID: 'agent:session-id',
 
   // Workspace
   WORKSPACE_LIST: 'workspace:list',

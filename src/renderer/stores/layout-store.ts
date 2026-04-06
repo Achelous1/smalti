@@ -515,6 +515,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         isActive: tab.id === pane.activeTabId,
         agentId: tab.agentId,
         pluginId: tab.pluginId,
+        agentSessionId: tab.agentSessionId,
       }));
       return {
         id: pane.id,
@@ -601,6 +602,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             sessionId = await window.aide.terminal.spawn({
               shell: savedTab.agentId || undefined,
               cwd: wsPath,
+              agentType: savedTab.type === 'agent' ? (savedTab.agentId as 'claude' | 'gemini' | 'codex' | undefined) : undefined,
+              resumeSessionId: savedTab.agentSessionId,
             });
           } catch {
             // agent not installed — fall back to plain shell

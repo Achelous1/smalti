@@ -3,6 +3,7 @@ export interface TerminalSpawnOptions {
   shell?: string;
   cwd?: string;
   agentType?: 'claude' | 'gemini' | 'codex' | 'shell';
+  resumeSessionId?: string;  // Agent session ID for resume
 }
 
 /** File tree node */
@@ -66,6 +67,7 @@ export interface TerminalTab {
   agentId?: string;
   pluginId?: string;
   sessionId?: string;
+  agentSessionId?: string;  // Captured agent session ID for resume
   title: string;
 }
 
@@ -199,6 +201,7 @@ export interface SavedTab {
   isActive: boolean;
   agentId?: string;
   pluginId?: string;
+  agentSessionId?: string;
 }
 
 export interface SavedSession {
@@ -235,6 +238,7 @@ export interface AideAPI {
     resize(sessionId: string, cols: number, rows: number): Promise<void>;
     kill(sessionId: string): Promise<void>;
     onData(callback: (sessionId: string, data: string) => void): () => void;
+    onAgentSessionId(callback: (sessionId: string, agentSessionId: string) => void): () => void;
   };
   workspace: {
     list(): Promise<WorkspaceInfo[]>;

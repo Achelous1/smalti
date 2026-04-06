@@ -68,6 +68,13 @@ const aideAPI: AideAPI = {
         ipcRenderer.removeListener(IPC_CHANNELS.TERMINAL_DATA, listener);
       };
     },
+
+    onAgentSessionId: (callback: (sessionId: string, agentSessionId: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, sessionId: string, agentSessionId: string) =>
+        callback(sessionId, agentSessionId);
+      ipcRenderer.on(IPC_CHANNELS.AGENT_SESSION_ID, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.AGENT_SESSION_ID, handler); };
+    },
   },
 
   workspace: {

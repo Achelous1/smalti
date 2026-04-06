@@ -44,6 +44,21 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
+  // Track agent session IDs for resume support
+  useEffect(() => {
+    const unsub = window.aide.terminal.onAgentSessionId((sessionId, agentSessionId) => {
+      const panes = useLayoutStore.getState().getAllPanes();
+      for (const pane of panes) {
+        const tab = pane.tabs.find(t => t.sessionId === sessionId);
+        if (tab) {
+          tab.agentSessionId = agentSessionId;
+          break;
+        }
+      }
+    });
+    return unsub;
+  }, []);
+
   // PaneView auto-spawns a shell when empty — no App-level auto-create needed
 
   // Global keyboard shortcuts
