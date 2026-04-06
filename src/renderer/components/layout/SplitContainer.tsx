@@ -90,6 +90,16 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
       startPos.current = isHorizontal ? e.clientX : e.clientY;
       startSizes.current = [...sizes];
 
+      // Disable pointer events on all iframes during the resize drag.
+      // Otherwise the cursor crossing a plugin iframe captures the mouse
+      // events and the resize breaks mid-gesture. Restored on mouseup.
+      const iframes = document.querySelectorAll('iframe');
+      const savedPointerEvents = new Map<HTMLIFrameElement, string>();
+      iframes.forEach((iframe) => {
+        savedPointerEvents.set(iframe, iframe.style.pointerEvents);
+        iframe.style.pointerEvents = 'none';
+      });
+
       // The flex container is the divider's direct parent
       const parentEl = dividerRef.current?.parentElement;
       const parentSize = parentEl
@@ -121,6 +131,10 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
         document.removeEventListener('mouseup', onMouseUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+        // Restore iframe pointer events
+        savedPointerEvents.forEach((original, iframe) => {
+          iframe.style.pointerEvents = original;
+        });
       };
 
       document.addEventListener('mousemove', onMouseMove);
