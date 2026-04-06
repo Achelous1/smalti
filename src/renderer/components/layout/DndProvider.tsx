@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useCallback } from 'react';
+import { type ReactNode, useState, useCallback, useRef } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -25,17 +25,46 @@ interface DndProviderProps {
 export function DndProvider({ children }: DndProviderProps) {
   const [draggingTab, setDraggingTab] = useState<{ tab: TerminalTab; sourcePaneId: string } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  // Stash original pointer-events of iframes so we can restore them after drag
+  const iframePointerEventsRef = useRef<Map<HTMLIFrameElement, string>>(new Map());
+
+  // Disable pointer events on all iframes during drag — otherwise iframes capture
+  // the cursor and dnd-kit loses the pointer, breaking the drag mid-gesture.
+  const disableIframePointerEvents = useCallback(() => {
+    const iframes = document.querySelectorAll('iframe');
+    const map = iframePointerEventsRef.current;
+    map.clear();
+    iframes.forEach((iframe) => {
+      map.set(iframe, iframe.style.pointerEvents);
+      iframe.style.pointerEvents = 'none';
+    });
+  }, []);
+
+  const restoreIframePointerEvents = useCallback(() => {
+    const map = iframePointerEventsRef.current;
+    map.forEach((original, iframe) => {
+      iframe.style.pointerEvents = original;
+    });
+    map.clear();
+  }, []);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current;
     if (data?.tab && data?.paneId) {
       setDraggingTab({ tab: data.tab as TerminalTab, sourcePaneId: data.paneId as string });
+      disableIframePointerEvents();
     }
-  }, []);
+  }, [disableIframePointerEvents]);
+
+  const handleDragCancel = useCallback(() => {
+    setDraggingTab(null);
+    restoreIframePointerEvents();
+  }, [restoreIframePointerEvents]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setDraggingTab(null);
+    restoreIframePointerEvents();
 
     if (!over || !draggingTab) return;
 
@@ -91,10 +120,10 @@ export function DndProvider({ children }: DndProviderProps) {
         }
       }
     }
-  }, [draggingTab]);
+  }, [draggingTab, restoreIframePointerEvents]);
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
       {children}
       <DragOverlay>
         {draggingTab && (

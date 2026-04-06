@@ -13,7 +13,7 @@ function getResumeArgs(agentType: string, sessionId: string): string[] {
   switch (agentType) {
     case 'claude': return ['--resume', sessionId];
     case 'codex': return ['resume', sessionId];
-    case 'gemini': return ['--resume', sessionId];
+    // Gemini CLI does not support --resume in current versions
     default: return [];
   }
 }
@@ -22,8 +22,8 @@ function getResumeArgs(agentType: string, sessionId: string): string[] {
 function getContinueArgs(agentType: string): string[] {
   switch (agentType) {
     case 'claude': return ['--continue'];
-    case 'gemini': return ['--resume'];         // bare --resume = most recent
     case 'codex': return ['resume', '--last'];
+    // Gemini CLI does not support session resume in current versions
     default: return [];
   }
 }
@@ -74,7 +74,12 @@ interface PtySession {
   webContentsId: number;
   agentSessionId?: string;
   sessionDetectTimer?: ReturnType<typeof setInterval>;
+  /** Timestamp of last user keystroke — used to ignore PTY echo in status detection */
+  lastUserInputAt: number;
 }
+
+/** PTY data arriving within this window after user input is treated as echo, not agent output */
+const USER_ECHO_WINDOW_MS = 150;
 
 const sessions = new Map<string, PtySession>();
 let sessionCounter = 0;
@@ -165,8 +170,10 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
       const session: PtySession = {
         pty: ptyProcess,
         webContentsId: event.sender.id,
+        lastUserInputAt: 0,
       };
       sessions.set(sessionId, session);
+      statusDetector.register(sessionId, options?.agentType ?? 'shell');
 
       ptyProcess.onData((data: string) => {
         broadcastToRenderer(
@@ -175,7 +182,14 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
           sessionId,
           data
         );
-        statusDetector.feed(sessionId, data);
+        // For shell sessions, skip PTY echo that follows user keystrokes.
+        // Agent TUI sessions (claude, gemini, codex) don't echo keystrokes —
+        // their output is always legitimate UI content that must reach the detector.
+        const agentType = options?.agentType ?? 'shell';
+        const sinceInput = Date.now() - session.lastUserInputAt;
+        if (agentType !== 'shell' || sinceInput > USER_ECHO_WINDOW_MS) {
+          statusDetector.feed(sessionId, data);
+        }
       });
 
       ptyProcess.onExit(() => {
@@ -212,6 +226,8 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
     (_event, sessionId: string, data: string) => {
       const session = sessions.get(sessionId);
       if (session) {
+        session.lastUserInputAt = Date.now();
+        statusDetector.notifyUserInput(sessionId);
         session.pty.write(data);
       }
     }
