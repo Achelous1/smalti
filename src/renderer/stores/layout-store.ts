@@ -563,6 +563,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   restoreSession: async (workspaceId) => {
     const session = await window.aide.session.load(workspaceId);
+
+    // Clear stale tabs from the previous workspace before populating new ones.
+    // This prevents duplication when switchWorkspace has already saved a snapshot
+    // into workspaceTabs and restoreSession then calls addTab for each restored tab.
+    useTerminalStore.getState().clearTabs();
+
     if (!session) {
       get().resetLayout();
       return;

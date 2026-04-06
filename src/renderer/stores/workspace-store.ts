@@ -40,9 +40,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       if (prevId) {
         await useLayoutStore.getState().saveSession(prevId);
       }
+
+      // Save departing workspace tabs to the cache for WorkspaceNav display,
+      // then kill all PTYs belonging to the departing workspace to prevent leaks.
+      // (Agents re-spawn fresh on restore — they cannot be truly "resumed" across switches.)
       useTerminalStore.getState().switchWorkspace(prevId, id);
-      // Restore session for new workspace
+      const oldTabs = useTerminalStore.getState().tabs;
+      for (const tab of oldTabs) {
+        if (tab.sessionId) {
+          window.aide.terminal.kill(tab.sessionId).catch(() => {});
+        }
+      }
+
+      // Restore session for new workspace — this is the single source of truth.
+      // restoreSession clears terminal-store.tabs before adding new ones.
       await useLayoutStore.getState().restoreSession(id);
+
+      // Update workspaceTabs cache with the freshly restored tabs so WorkspaceNav
+      // shows the correct list if this workspace is later viewed while inactive.
+      useTerminalStore.getState().saveWorkspaceTabs(id);
+
       // Notify main process so getActiveWorkspacePath() is updated before loadPlugins()
       const workspace = get().workspaces.find((w) => w.id === id);
       if (workspace) {

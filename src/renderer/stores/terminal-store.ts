@@ -6,7 +6,7 @@ interface TerminalState {
   tabs: TerminalTab[];
   activeTabId: string | null;
   dropdownOpen: boolean;
-  /** Per-workspace tab storage */
+  /** Per-workspace tab storage (used by WorkspaceNav to display inactive workspace tabs) */
   workspaceTabs: Record<string, { tabs: TerminalTab[]; activeTabId: string | null }>;
   addTab: (tab: TerminalTab) => void;
   removeTab: (id: string) => void;
@@ -14,7 +14,11 @@ interface TerminalState {
   toggleDropdown: () => void;
   updateTabSession: (tabId: string, sessionId: string) => void;
   createDefaultTab: () => string;
-  /** Save current tabs for a workspace and load tabs for another */
+  /** Clear the active tabs array (called before restoring a new workspace's session) */
+  clearTabs: () => void;
+  /** Save current tabs snapshot for a workspace (for WorkspaceNav inactive display) */
+  saveWorkspaceTabs: (workspaceId: string) => void;
+  /** Save current tabs for the workspace we're leaving (WorkspaceNav cache only — does NOT load new workspace tabs) */
   switchWorkspace: (fromWorkspaceId: string | null, toWorkspaceId: string) => void;
 }
 
@@ -58,25 +62,27 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     return tabId;
   },
 
-  switchWorkspace: (fromWorkspaceId, toWorkspaceId) =>
+  clearTabs: () => set({ tabs: [], activeTabId: null }),
+
+  saveWorkspaceTabs: (workspaceId) =>
+    set((state) => ({
+      workspaceTabs: {
+        ...state.workspaceTabs,
+        [workspaceId]: { tabs: state.tabs, activeTabId: state.activeTabId },
+      },
+    })),
+
+  switchWorkspace: (fromWorkspaceId) =>
     set((state) => {
-      const updated = { ...state.workspaceTabs };
-
-      // Save current tabs for the workspace we're leaving
-      if (fromWorkspaceId) {
-        updated[fromWorkspaceId] = {
-          tabs: state.tabs,
-          activeTabId: state.activeTabId,
-        };
-      }
-
-      // Load tabs for the workspace we're switching to
-      const saved = updated[toWorkspaceId];
-
+      // Only save the departing workspace's tabs into the cache for WorkspaceNav.
+      // Do NOT load from cache here — restoreSession is the single source of truth
+      // for populating tabs when switching to a new workspace.
+      if (!fromWorkspaceId) return state;
       return {
-        workspaceTabs: updated,
-        tabs: saved?.tabs ?? [],
-        activeTabId: saved?.activeTabId ?? null,
+        workspaceTabs: {
+          ...state.workspaceTabs,
+          [fromWorkspaceId]: { tabs: state.tabs, activeTabId: state.activeTabId },
+        },
       };
     }),
 }));
