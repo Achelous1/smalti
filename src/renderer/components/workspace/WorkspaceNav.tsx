@@ -2,35 +2,73 @@ import { useEffect, useState } from 'react';
 import { useWorkspaceStore } from '../../stores/workspace-store';
 import { useAgentStore } from '../../stores/agent-store';
 import { useTerminalStore } from '../../stores/terminal-store';
-import type { AgentStatus, GitStatus } from '../../../types/ipc';
+import { useLayoutStore } from '../../stores/layout-store';
+import { isSplitLayout, type AgentStatus, type GitStatus, type LayoutNode, type TerminalTab } from '../../../types/ipc';
 
-function StatusDot({ status }: { status: AgentStatus }) {
-  if (status === 'idle') {
-    return <span className="text-[10px] leading-none" style={{ color: '#3B82F6' }}>●</span>;
+/** Recursively collect all tabs from a layout tree (source of truth for visible tabs). */
+function collectPaneTabs(node: LayoutNode): TerminalTab[] {
+  if (isSplitLayout(node)) {
+    return node.children.flatMap(collectPaneTabs);
   }
-  if (status === 'processing') {
-    return <span className="text-[10px] leading-none" style={{ color: '#F59E0B' }}>···</span>;
-  }
-  // awaiting-input
-  return <span className="text-[10px] leading-none" style={{ color: '#F59E0B' }}>?</span>;
+  return node.tabs;
 }
 
-function StatusBadge({ status }: { status: AgentStatus }) {
+/** Three bouncing dots with phase-offset animation (typing indicator) */
+function BouncingDots({ color, size = 3 }: { color: string; size?: number }) {
+  return (
+    <span className="inline-flex items-end gap-[1px]" style={{ height: size + 3 }}>
+      <span className="dot-bounce rounded-full" style={{ width: size, height: size, backgroundColor: color }} />
+      <span className="dot-bounce rounded-full" style={{ width: size, height: size, backgroundColor: color }} />
+      <span className="dot-bounce rounded-full" style={{ width: size, height: size, backgroundColor: color }} />
+    </span>
+  );
+}
+
+function StatusDot({ status }: { status: AgentStatus }) {
+  // key={status} forces remount on change → re-triggers the ding animation
   if (status === 'idle') {
     return (
-      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#3B82F6] border border-aide-surface-elevated" />
+      <span key="idle" className="status-ding text-[10px] leading-none" style={{ color: '#3B82F6' }}>●</span>
     );
   }
   if (status === 'processing') {
     return (
-      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#F59E0B] border border-aide-surface-elevated flex items-center justify-center">
-        <span className="text-[6px] text-black font-bold leading-none">···</span>
+      <span key="processing" className="status-ding inline-flex items-center leading-none">
+        <BouncingDots color="#F59E0B" size={3} />
       </span>
     );
   }
   // awaiting-input
   return (
-    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#F59E0B] border border-aide-surface-elevated flex items-center justify-center">
+    <span key="awaiting" className="status-ding text-[10px] leading-none font-bold" style={{ color: '#F59E0B' }}>?</span>
+  );
+}
+
+function StatusBadge({ status }: { status: AgentStatus }) {
+  if (status === 'idle') {
+    return (
+      <span
+        key="idle"
+        className="status-ding absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#3B82F6] border border-aide-surface-elevated"
+      />
+    );
+  }
+  if (status === 'processing') {
+    return (
+      <span
+        key="processing"
+        className="status-ding absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F59E0B] border border-aide-surface-elevated flex items-center justify-center"
+      >
+        <BouncingDots color="#000" size={2} />
+      </span>
+    );
+  }
+  // awaiting-input
+  return (
+    <span
+      key="awaiting"
+      className="status-ding absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#F59E0B] border border-aide-surface-elevated flex items-center justify-center"
+    >
       <span className="text-[7px] text-black font-bold leading-none">?</span>
     </span>
   );
@@ -39,7 +77,9 @@ function StatusBadge({ status }: { status: AgentStatus }) {
 export function WorkspaceNav() {
   const { workspaces, activeWorkspaceId, navExpanded, setActive, toggleNav, addWorkspace } = useWorkspaceStore();
   const { sessionStatuses } = useAgentStore();
-  const { workspaceTabs, tabs: activeTabs, activeTabId, setActiveTab } = useTerminalStore();
+  const { workspaceTabs, activeTabId, setActiveTab } = useTerminalStore();
+  // Subscribe to layout so this component re-renders when active workspace tabs change
+  const layout = useLayoutStore((s) => s.layout);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [gitStatuses, setGitStatuses] = useState<Record<string, GitStatus | null>>({});
 
@@ -82,12 +122,16 @@ export function WorkspaceNav() {
     return entry ? entry[1] : null;
   };
 
-  // Get tabs for a given workspace (may be active or stored)
-  const getTabsForWorkspace = (workspaceId: string) => {
-    if (workspaceId === activeWorkspaceId) {
-      return activeTabs;
-    }
-    return workspaceTabs[workspaceId]?.tabs ?? [];
+  // Get tabs for a given workspace (active: from layout tree; inactive: from saved snapshot).
+  // Excludes plugin tabs and sorts alphabetically by title.
+  const getTabsForWorkspace = (workspaceId: string): TerminalTab[] => {
+    const rawTabs = workspaceId === activeWorkspaceId
+      ? collectPaneTabs(layout)
+      : workspaceTabs[workspaceId]?.tabs ?? [];
+    return rawTabs
+      .filter((t) => t.type !== 'plugin')
+      .slice()
+      .sort((a, b) => a.title.localeCompare(b.title));
   };
 
   const getActiveTabIdForWorkspace = (workspaceId: string) => {
