@@ -264,6 +264,8 @@ export interface AideAPI {
     getHtml: (id: string) => Promise<string | null>;
     onChanged(callback: () => void): () => void;
     onDataChanged(callback: () => void): () => void;
+    onHtmlChanged(callback: (pluginName: string) => void): () => void;
+    reload(pluginId: string): Promise<boolean>;
   };
   mcp: {
     status(): Promise<McpStatus>;
