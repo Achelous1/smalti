@@ -139,3 +139,111 @@ body {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ============================================================
+ * Drag interaction visual feedback
+ * ============================================================ */
+
+/* Insert position indicator — 2px blue vertical line between tabs */
+.drag-insert-line {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background-color: #3B82F6;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* Cross-pane drop overlay — blue tint + centered label */
+.drag-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(59, 130, 246, 0.10);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  pointer-events: none;
+}
+
+.drag-drop-overlay__text {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: #3B82F6;
+  opacity: 0.9;
+}
+
+/* Drag handle braille icon on tabs — visible on hover */
+.drag-handle-icon {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 100ms ease-out;
+  user-select: none;
+  line-height: 1;
+}
+
+button:hover .drag-handle-icon,
+button:focus-visible .drag-handle-icon {
+  opacity: 1;
+}
+
+/* Resize divider — 4px blue highlight on hover and active drag */
+.resize-divider {
+  background-color: var(--border);
+  transition: background-color 150ms ease-out;
+}
+
+.resize-divider:hover,
+.resize-divider--active {
+  background-color: #3B82F6;
+}
+
+/* Expand visual width/height to 4px via ::before pseudo-element */
+.resize-divider::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: transparent;
+  transition: background-color 150ms ease-out;
+  z-index: 5;
+}
+
+/* Horizontal divider: expand left/right by 1.5px each side = 4px total */
+.resize-divider.cursor-col-resize::before {
+  left: -1.5px;
+  right: -1.5px;
+}
+
+/* Vertical divider: expand top/bottom by 1.5px each side = 4px total */
+.resize-divider.cursor-row-resize::before {
+  top: -1.5px;
+  bottom: -1.5px;
+}
+
+.resize-divider:hover::before,
+.resize-divider--active::before {
+  background-color: #3B82F6;
+}
+
+/* Direction icon on resize divider */
+.resize-divider__icon {
+  position: absolute;
+  z-index: 15;
+  font-size: 10px;
+  color: #3B82F6;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  pointer-events: none;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.resize-divider:hover .resize-divider__icon,
+.resize-divider--active .resize-divider__icon {
+  opacity: 1;
+}

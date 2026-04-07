@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { PaneView } from './PaneView';
 import { useLayoutStore } from '../../stores/layout-store';
 import type { LayoutNode } from '../../../types/ipc';
@@ -78,6 +78,7 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
   const dragging = useRef(false);
   const startPos = useRef(0);
   const startSizes = useRef<number[]>([]);
+  const [isActive, setIsActive] = useState(false);
 
   const isHorizontal = direction === 'horizontal';
 
@@ -85,8 +86,19 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
     (e: React.MouseEvent) => {
       e.preventDefault();
       dragging.current = true;
+      setIsActive(true);
       startPos.current = isHorizontal ? e.clientX : e.clientY;
       startSizes.current = [...sizes];
+
+      // Disable pointer events on all iframes during the resize drag.
+      // Otherwise the cursor crossing a plugin iframe captures the mouse
+      // events and the resize breaks mid-gesture. Restored on mouseup.
+      const iframes = document.querySelectorAll('iframe');
+      const savedPointerEvents = new Map<HTMLIFrameElement, string>();
+      iframes.forEach((iframe) => {
+        savedPointerEvents.set(iframe, iframe.style.pointerEvents);
+        iframe.style.pointerEvents = 'none';
+      });
 
       // The flex container is the divider's direct parent
       const parentEl = dividerRef.current?.parentElement;
@@ -114,10 +126,15 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
 
       const onMouseUp = () => {
         dragging.current = false;
+        setIsActive(false);
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+        // Restore iframe pointer events
+        savedPointerEvents.forEach((original, iframe) => {
+          iframe.style.pointerEvents = original;
+        });
       };
 
       document.addEventListener('mousemove', onMouseMove);
@@ -132,9 +149,9 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
     <div
       ref={dividerRef}
       onMouseDown={onMouseDown}
-      className={`shrink-0 bg-aide-border hover:bg-blue-500 transition-colors relative group ${
+      className={`resize-divider shrink-0 relative group ${
         isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'
-      }`}
+      } ${isActive ? 'resize-divider--active' : ''}`}
       style={{
         [isHorizontal ? 'width' : 'height']: '1px',
       }}
@@ -149,6 +166,17 @@ function ResizeDivider({ splitId, index, direction, sizes }: ResizeDividerProps)
             : { left: 0, right: 0, top: -3, bottom: -3 }
         }
       />
+      {/* Direction icon — shown on hover and drag */}
+      <div
+        className="resize-divider__icon"
+        style={
+          isHorizontal
+            ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
+            : { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
+        }
+      >
+        {isHorizontal ? '↔' : '↕'}
+      </div>
     </div>
   );
 }
