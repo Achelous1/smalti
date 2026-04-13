@@ -16,12 +16,13 @@ function collectPaneTabs(node: LayoutNode): TerminalTab[] {
 }
 
 export function WorkspaceNav() {
-  const { workspaces, activeWorkspaceId, navExpanded, setActive, toggleNav, addWorkspace } = useWorkspaceStore();
+  const { workspaces, activeWorkspaceId, navExpanded, setActive, toggleNav, addWorkspace, removeWorkspace } = useWorkspaceStore();
   const { sessionStatuses } = useAgentStore();
   const { workspaceTabs, activeTabId, setActiveTab } = useTerminalStore();
   // Subscribe to layout so this component re-renders when active workspace tabs change
   const layout = useLayoutStore((s) => s.layout);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!window.aide?.agent?.onStatus) return;
@@ -99,6 +100,22 @@ export function WorkspaceNav() {
     setActiveTab(tabId);
   };
 
+  const handleDeleteWorkspace = async (id: string) => {
+    if (workspaces.length <= 1) return; // Can't delete the last workspace
+    // If deleting the active workspace, switch to another one first
+    if (id === activeWorkspaceId) {
+      const other = workspaces.find((w) => w.id !== id);
+      if (other) await setActive(other.id);
+    }
+    try {
+      await window.aide.workspace.remove(id);
+    } catch {
+      // ignore IPC errors — still remove from local state
+    }
+    removeWorkspace(id);
+    setDeleteConfirmId(null);
+  };
+
   if (navExpanded) {
     return (
       <div
@@ -130,7 +147,7 @@ export function WorkspaceNav() {
               <div key={ws.id}>
                 {/* Project row */}
                 <div
-                  className={`flex items-center gap-1 px-1 py-1.5 rounded transition-colors ${
+                  className={`group flex items-center gap-1 px-1 py-1.5 rounded transition-colors ${
                     isActive ? 'bg-aide-surface-elevated' : 'hover:bg-aide-surface-elevated'
                   }`}
                 >
@@ -175,6 +192,18 @@ export function WorkspaceNav() {
                   >
                     +
                   </button>
+
+                  {/* Delete workspace button — only shown when multiple workspaces exist */}
+                  {workspaces.length > 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(ws.id); }}
+                      title="Delete workspace"
+                      className="opacity-0 group-hover:opacity-100 text-aide-text-tertiary hover:text-red-400 shrink-0 flex items-center justify-center transition-opacity"
+                      style={{ fontSize: '12px', width: '14px', height: '14px' }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
 
                 {/* Agent entries */}
@@ -219,6 +248,31 @@ export function WorkspaceNav() {
             <span>New Workspace</span>
           </button>
         </div>
+
+        {/* Delete workspace confirmation dialog */}
+        {deleteConfirmId && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+            <div className="bg-aide-surface-elevated border border-aide-border rounded-lg px-4 py-3 flex flex-col gap-3 max-w-[180px] w-full mx-3">
+              <span className="text-xs font-mono text-aide-text-primary">
+                Delete &ldquo;{workspaces.find((w) => w.id === deleteConfirmId)?.name}&rdquo;?
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDeleteWorkspace(deleteConfirmId)}
+                  className="flex-1 px-2 py-1 text-[10px] font-mono bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 px-2 py-1 text-[10px] font-mono bg-aide-border text-aide-text-secondary rounded hover:text-aide-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

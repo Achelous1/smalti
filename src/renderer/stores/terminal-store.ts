@@ -10,6 +10,7 @@ interface TerminalState {
   workspaceTabs: Record<string, { tabs: TerminalTab[]; activeTabId: string | null }>;
   addTab: (tab: TerminalTab) => void;
   removeTab: (id: string) => void;
+  renameTab: (id: string, title: string) => void;
   setActiveTab: (id: string | null) => void;
   toggleDropdown: () => void;
   updateTabSession: (tabId: string, sessionId: string) => void;
@@ -29,6 +30,9 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   workspaceTabs: {},
 
   addTab: (tab) => set((state) => ({ tabs: [...state.tabs, tab] })),
+
+  renameTab: (id, title) =>
+    set((state) => ({ tabs: state.tabs.map((t) => (t.id === id ? { ...t, title } : t)) })),
 
   removeTab: (id) =>
     set((state) => {

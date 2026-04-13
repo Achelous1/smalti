@@ -1,6 +1,8 @@
 import { app } from 'electron';
 import { execSync } from 'child_process';
 import { userInfo } from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Packaged Electron apps on macOS launched from Finder don't inherit
@@ -29,9 +31,26 @@ export function fixPackagedEnv(): void {
       }
     }
   } catch {
-    // Fallback: ensure minimal PATH and correct HOME exist
+    // Fallback: ensure minimal PATH + try to detect nvm's default node
+    const homedir = (() => { try { return userInfo().homedir; } catch { return process.env.HOME || '/'; } })();
+    let extraPaths = '/usr/local/bin:/opt/homebrew/bin';
+
+    // Try to find nvm's current default node binary
+    try {
+      const nvmDir = process.env.NVM_DIR || path.join(homedir, '.nvm');
+      const defaultAlias = path.join(nvmDir, 'alias', 'default');
+      if (fs.existsSync(defaultAlias)) {
+        let version = fs.readFileSync(defaultAlias, 'utf-8').trim();
+        if (version.includes('/')) version = path.basename(version);
+        const nvmNodeBin = path.join(nvmDir, 'versions', 'node', version, 'bin');
+        if (fs.existsSync(nvmNodeBin)) {
+          extraPaths = `${nvmNodeBin}:${extraPaths}`;
+        }
+      }
+    } catch { /* ignore nvm detection errors */ }
+
     if (!process.env.PATH?.includes('/usr/local/bin')) {
-      process.env.PATH = `/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || '/usr/bin:/bin'}`;
+      process.env.PATH = `${extraPaths}:${process.env.PATH || '/usr/bin:/bin'}`;
     }
   }
 
