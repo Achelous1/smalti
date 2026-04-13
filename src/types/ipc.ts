@@ -25,6 +25,8 @@ export interface PluginInfo {
   active: boolean;
   scope: 'local' | 'global';
   tools: PluginTool[];
+  /** File extensions this plugin handles, e.g. ['.json', '.yaml'] */
+  fileAssociations?: string[];
 }
 
 /** Plugin tool definition */
