@@ -104,6 +104,13 @@ echo "  Converting to compressed DMG..."
 hdiutil convert "$DMG_TMP_PATH" -format UDZO -o "$DMG_PATH"
 rm -f "$DMG_TMP_PATH"
 
+# Create .app.zip for in-place auto-update
+echo "[+] Creating app.zip for auto-update..."
+ZIP_PATH="out/AIDE.app.zip"
+rm -f "$ZIP_PATH"
+ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
+
 echo ""
 echo "Build complete!"
 echo "Output: $DMG_PATH"
+echo "        $ZIP_PATH"

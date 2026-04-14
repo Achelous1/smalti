@@ -61,6 +61,7 @@ export const IPC_CHANNELS = {
   // Updater
   UPDATER_CHECK: 'updater:check',
   UPDATER_DOWNLOAD: 'updater:download',
+  UPDATER_INSTALL: 'updater:install',
   UPDATER_INFO_CHANGED: 'updater:info-changed',
   UPDATER_GET_INFO: 'updater:get-info',
 

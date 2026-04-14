@@ -226,6 +226,8 @@ export interface UpdateInfo {
   hasUpdate: boolean;
   /** Download URL of the macOS DMG asset, if present */
   downloadUrl: string | null;
+  /** Download URL of the .app.zip asset for in-place auto-install, if present */
+  zipDownloadUrl: string | null;
   /** Human-readable release name */
   releaseName: string | null;
   /** Web URL of the release page (fallback for non-DMG platforms) */
@@ -314,6 +316,7 @@ export interface AideAPI {
     check(): Promise<UpdateInfo | null>;
     getInfo(): Promise<UpdateInfo | null>;
     download(): Promise<{ ok: boolean; path?: string; error?: string }>;
+    install(): Promise<{ ok: boolean; error?: string }>;
     onChanged(callback: (info: UpdateInfo | null) => void): () => void;
   };
 }

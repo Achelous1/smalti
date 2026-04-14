@@ -168,8 +168,8 @@ export function WorkspaceNav() {
   if (navExpanded) {
     return (
       <div
-        className="flex flex-col bg-aide-surface-sidebar border-r border-aide-border shrink-0 overflow-y-auto"
-        style={{ width: '220px' }}
+        className="flex flex-col bg-aide-surface-sidebar border-r border-aide-border shrink-0 min-h-0"
+        style={{ width: '220px', height: '100%' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 shrink-0">
@@ -184,7 +184,7 @@ export function WorkspaceNav() {
         </div>
 
         {/* Workspace list */}
-        <div className="flex flex-col gap-0.5 px-1">
+        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-0.5 px-1">
           {workspaces.map((ws) => {
             const isActive = ws.id === activeWorkspaceId;
             const status = getWorkspaceStatus(ws.id);
@@ -307,10 +307,8 @@ export function WorkspaceNav() {
           })}
         </div>
 
-        <UpdateNotice />
-
         {/* Add button */}
-        <div className="px-2 mt-2">
+        <div className="px-2 py-2 shrink-0">
           <button
             onClick={handleAddWorkspace}
             className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs font-mono text-aide-text-secondary hover:bg-aide-surface-elevated transition-colors"
@@ -319,6 +317,8 @@ export function WorkspaceNav() {
             <span>New Workspace</span>
           </button>
         </div>
+
+        <UpdateNotice />
 
         {/* Context menu */}
         {contextMenuId && (
@@ -381,7 +381,7 @@ export function WorkspaceNav() {
   return (
     <div
       className="flex flex-col items-center py-2 gap-2 bg-aide-surface-sidebar border-r border-aide-border shrink-0"
-      style={{ width: '48px' }}
+      style={{ width: '48px', height: '100%' }}
     >
       {/* Expand toggle */}
       <button
@@ -419,7 +419,7 @@ export function WorkspaceNav() {
 
       <div className="w-6 border-t border-aide-border my-1" />
 
-      <UpdateNotice collapsed />
+      <div className="flex-1" />
 
       <button
         onClick={handleAddWorkspace}
@@ -428,6 +428,8 @@ export function WorkspaceNav() {
       >
         +
       </button>
+
+      <UpdateNotice collapsed />
     </div>
   );
 }
