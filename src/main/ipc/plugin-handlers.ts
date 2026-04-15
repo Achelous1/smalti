@@ -32,7 +32,16 @@ function readPluginSpec(pluginDir: string): PluginSpec | null {
 
 function loadDirIntoRegistry(dir: string, scope: 'local' | 'global'): void {
   if (!fs.existsSync(dir)) return;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    // EPERM on macOS when the workspace path is in a TCC-restricted location
+    // (e.g. Documents without Full Disk Access). Treat as "no plugins" so the
+    // PLUGIN_LIST IPC doesn't fail and abort the renderer's workspace flow.
+    console.warn('[AIDE] Could not scan plugins dir', dir, ':', (err as Error).message);
+    return;
+  }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const pluginDir = path.join(dir, entry.name);
