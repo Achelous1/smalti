@@ -5,6 +5,7 @@ import Store from 'electron-store';
 import { IPC_CHANNELS } from './channels';
 import type { WorkspaceInfo } from '../../types/ipc';
 import { writeMcpConfig } from '../mcp/config-writer';
+import { setWorkspaceWatcher } from './fs-handlers';
 
 const store = new Store({ name: 'aide-workspaces' });
 
@@ -86,6 +87,9 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     // .aide/plugins creation is delegated (see WORKSPACE_CREATE comment).
     try { writeMcpConfig(path); } catch (err) {
       console.warn('[AIDE] Failed to write workspace MCP config:', (err as Error).message);
+    }
+    try { setWorkspaceWatcher(path); } catch (err) {
+      console.warn('[AIDE] Failed to set workspace watcher:', (err as Error).message);
     }
     return activeWorkspacePath;
   });
