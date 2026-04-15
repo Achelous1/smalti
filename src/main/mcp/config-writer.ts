@@ -110,8 +110,15 @@ export function writeMcpConfig(workspacePath: string): string {
   const nodePath = resolveNodePath();
   const serverPath = getMcpServerPath();
 
-  fs.mkdirSync(globalPluginsDir, { recursive: true });
-  fs.mkdirSync(localPluginsDir, { recursive: true });
+  // Global dir is under HOME — always writable. Local dir lives inside the
+  // workspace and may be permission-restricted (macOS TCC). Isolate failures
+  // so a restricted workspace doesn't skip global MCP registration.
+  try { fs.mkdirSync(globalPluginsDir, { recursive: true }); } catch (err) {
+    console.warn('[AIDE] Could not create global plugins dir:', (err as Error).message);
+  }
+  try { fs.mkdirSync(localPluginsDir, { recursive: true }); } catch (err) {
+    console.warn('[AIDE] Could not create local plugins dir:', (err as Error).message);
+  }
 
   writeMcpServerScript();
 
