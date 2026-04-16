@@ -28,7 +28,9 @@ jobs:
       - name: Build DMG
         run: sh ./build.sh
 
-      - name: Upload DMG to release
+      - name: Upload assets to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" out/AIDE.dmg --clobber
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" out/AIDE.dmg --clobber
+          gh release upload "${{ github.event.release.tag_name }}" out/AIDE.app.zip --clobber

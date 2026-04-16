@@ -8,7 +8,9 @@
  */
 import { app, BrowserWindow, net, shell } from 'electron';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
+import { execFile, spawn } from 'child_process';
 import { IPC_CHANNELS } from '../ipc/channels';
 import { getHome } from '../utils/home';
 
@@ -26,6 +28,8 @@ export interface UpdateInfo {
   hasUpdate: boolean;
   /** Download URL of the macOS DMG asset, if present */
   downloadUrl: string | null;
+  /** Download URL of the .app.zip asset for in-place auto-install, if present */
+  zipDownloadUrl: string | null;
   /** Human-readable release name */
   releaseName: string | null;
   /** Web URL of the release page (fallback for non-DMG platforms) */
@@ -99,12 +103,14 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
     const latestTag = release.tag_name;
     const currentVersion = app.getVersion();
     const dmgAsset = release.assets.find((a) => a.name.endsWith('.dmg'));
+    const zipAsset = release.assets.find((a) => a.name.endsWith('.app.zip'));
 
     cachedInfo = {
       latestTag,
       currentVersion,
       hasUpdate: isNewer(latestTag, currentVersion),
       downloadUrl: dmgAsset?.browser_download_url ?? null,
+      zipDownloadUrl: zipAsset?.browser_download_url ?? null,
       releaseName: release.name,
       htmlUrl: release.html_url,
     };
@@ -161,6 +167,82 @@ export async function downloadUpdate(): Promise<{ ok: boolean; path?: string; er
     return { ok: false, error: (err as Error).message };
   } finally {
     downloading = false;
+  }
+}
+
+/**
+ * Download .app.zip, extract it, spawn a detached shell script that waits for
+ * the app to quit then replaces the .app bundle and relaunches.
+ * Falls back to downloadUpdate() if no zip asset is present.
+ */
+export async function installUpdate(): Promise<{ ok: boolean; error?: string }> {
+  if (!app.isPackaged) {
+    return { ok: false, error: 'Auto-install only available in packaged app' };
+  }
+  if (!cachedInfo?.zipDownloadUrl) {
+    // No zip asset — fall back to the DMG download path
+    return downloadUpdate();
+  }
+  if (downloading) return { ok: false, error: 'Already downloading' };
+  downloading = true;
+
+  try {
+    // 1. Download .app.zip to a temp directory
+    const tmpDir = path.join(os.tmpdir(), `aide-update-${Date.now()}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const zipPath = path.join(tmpDir, 'AIDE.app.zip');
+
+    const response = await net.fetch(cachedInfo.zipDownloadUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(zipPath, buffer);
+
+    // 2. Extract using ditto (preserves .app structure, symlinks, resource forks)
+    await new Promise<void>((resolve, reject) => {
+      execFile('ditto', ['-x', '-k', zipPath, tmpDir], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    const newAppPath = path.join(tmpDir, 'AIDE.app');
+    if (!fs.existsSync(newAppPath)) {
+      throw new Error('AIDE.app not found in zip');
+    }
+
+    // 3. Determine current .app bundle path from the executable path
+    const exePath = app.getPath('exe');
+    const appPath = exePath.replace(/\.app\/Contents\/.*$/, '.app');
+
+    // 4. Write the update shell script
+    const scriptPath = path.join(tmpDir, 'update.sh');
+    const script = [
+      '#!/bin/bash',
+      'sleep 3',
+      // Remove quarantine so macOS Gatekeeper doesn't block the replaced app
+      `xattr -rd com.apple.quarantine "${newAppPath}" 2>/dev/null || true`,
+      // Try direct replacement first; escalate to admin dialog if needed
+      `if rm -rf "${appPath}" 2>/dev/null && cp -R "${newAppPath}" "${appPath}" 2>/dev/null; then`,
+      '  echo "Replaced directly"',
+      'else',
+      `  osascript -e "do shell script \\"rm -rf '${appPath}' && cp -R '${newAppPath}' '${appPath}'\\" with administrator privileges" 2>/dev/null`,
+      'fi',
+      // Clean up temp directory and relaunch
+      `rm -rf "${tmpDir}"`,
+      `open "${appPath}"`,
+    ].join('\n');
+
+    fs.writeFileSync(scriptPath, script, { mode: 0o755 });
+
+    // 5. Spawn the script detached so it outlives the app process
+    spawn('bash', [scriptPath], { detached: true, stdio: 'ignore' }).unref();
+
+    // 6. Quit — the script will relaunch the updated app after 3 s
+    app.quit();
+    return { ok: true };
+  } catch (err) {
+    downloading = false;
+    return { ok: false, error: (err as Error).message };
   }
 }
 

@@ -197,6 +197,8 @@ const aideAPI: AideAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_INFO),
     download: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.UPDATER_DOWNLOAD),
+    install: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.UPDATER_INSTALL),
     onChanged: (callback: (info: UpdateInfo | null) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, info: UpdateInfo | null) =>
         callback(info);
