@@ -30,6 +30,7 @@ registerCustomSchemes();
 // are closed before lstat can read them. Safe to ignore.
 process.on('uncaughtException', (err) => {
   if (err.message?.includes('EBADF') && err.message?.includes('/dev/fd/')) return;
+  if (err.message?.includes('ThreadSafeFunction') || err.message?.includes('Napi::ThreadSafe')) return;
   throw err;
 });
 
@@ -110,9 +111,16 @@ app.on('ready', () => {
   }
 });
 
-app.on('before-quit', () => {
+let isQuitting = false;
+app.on('before-quit', async (event) => {
+  if (isQuitting) return;
+  isQuitting = true;
+  event.preventDefault();
   setWorkspaceWatcher(null);
-  killAllSessions();
+  try {
+    await killAllSessions();
+  } catch { /* ignore */ }
+  app.exit(0);
 });
 
 app.on('window-all-closed', () => {
