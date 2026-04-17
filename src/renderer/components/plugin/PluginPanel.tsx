@@ -47,8 +47,6 @@ export function PluginPanel() {
   };
 
   const activeCount = plugins.filter((p) => p.active).length;
-  const localPlugins = plugins.filter((p) => p.scope === 'local');
-  const globalPlugins = plugins.filter((p) => p.scope === 'global');
 
   const renderPlugin = (plugin: typeof plugins[number]) => (
     <div
@@ -146,23 +144,8 @@ export function PluginPanel() {
         )}
 
         {!loading && plugins.length > 0 && (
-          <div className="flex flex-col gap-3 px-2 py-2">
-            {localPlugins.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] uppercase tracking-widest text-aide-text-tertiary font-mono px-1 pb-0.5">
-                  Local
-                </span>
-                {localPlugins.map(renderPlugin)}
-              </div>
-            )}
-            {globalPlugins.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] uppercase tracking-widest text-aide-text-tertiary font-mono px-1 pb-0.5">
-                  Global
-                </span>
-                {globalPlugins.map(renderPlugin)}
-              </div>
-            )}
+          <div className="flex flex-col gap-1 px-2 py-2">
+            {plugins.map(renderPlugin)}
           </div>
         )}
       </div>

@@ -15,17 +15,15 @@ import { protocol } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getActiveWorkspacePath } from '../ipc/workspace-handlers';
-import { getHome } from '../utils/home';
 
 /**
- * Scan local + global plugin directories for a plugin matching `pluginId`
+ * Scan local plugin directory for a plugin matching `pluginId`
  * (by spec.id or spec.name) and return its index.html content.
  */
 function findPluginHtml(pluginId: string, fallbackCwd: string): string | null {
   const effectiveCwd = getActiveWorkspacePath() ?? fallbackCwd;
   const dirs = [
     path.join(effectiveCwd, '.aide', 'plugins'),
-    path.join(getHome(), '.aide', 'plugins'),
   ];
 
   for (const dir of dirs) {

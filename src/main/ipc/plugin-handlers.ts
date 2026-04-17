@@ -9,13 +9,8 @@ import type { PluginSpec } from '../plugin/spec-generator';
 import { generatePluginCode } from '../plugin/code-generator';
 import { PluginRegistry } from '../plugin/registry';
 import { getActiveWorkspacePath } from './workspace-handlers';
-import { getHome } from '../utils/home';
 
 const registry = new PluginRegistry();
-
-function getGlobalPluginsDir(): string {
-  return path.join(getHome(), '.aide', 'plugins');
-}
 
 function getLocalPluginsDir(cwd: string): string {
   return path.join(cwd, '.aide', 'plugins');
@@ -31,7 +26,7 @@ function readPluginSpec(pluginDir: string): PluginSpec | null {
   }
 }
 
-function loadDirIntoRegistry(dir: string, scope: 'local' | 'global'): void {
+function loadDirIntoRegistry(dir: string): void {
   if (!fs.existsSync(dir)) return;
   let entries: fs.Dirent[];
   try {
@@ -48,7 +43,7 @@ function loadDirIntoRegistry(dir: string, scope: 'local' | 'global'): void {
     const pluginDir = path.join(dir, entry.name);
     const spec = readPluginSpec(pluginDir);
     if (spec && !registry.get(spec.id)) {
-      registry.register(spec, pluginDir, scope);
+      registry.register(spec, pluginDir);
     }
   }
 }
@@ -56,21 +51,17 @@ function loadDirIntoRegistry(dir: string, scope: 'local' | 'global'): void {
 /**
  * Incremental rescan — called from chokidar events AND from PLUGIN_LIST.
  * Registers newly added plugins and unregisters plugins whose spec has
- * disappeared. Unlike refreshLocalPlugins, this runs even when the workspace
- * path hasn't changed, so plugins created at runtime (e.g. via MCP
- * aide_create_plugin) are picked up without restarting the app.
- *
- * Self-healing: PLUGIN_LIST calls this for BOTH scopes so global plugins
- * added after startup become visible inside a workspace without restart.
+ * disappeared. Runs even when the workspace path hasn't changed, so plugins
+ * created at runtime (e.g. via MCP aide_create_plugin) are picked up without
+ * restarting the app.
  */
-function rescanPluginsDir(dir: string, scope: 'local' | 'global'): void {
+function rescanPluginsDir(dir: string): void {
   // 1. Register any new plugins found on disk
-  loadDirIntoRegistry(dir, scope);
+  loadDirIntoRegistry(dir);
 
   // 2. Unregister plugins whose pluginDir no longer exists or whose spec
   //    has disappeared (plugin deleted by user or MCP)
-  const scoped = registry.list().filter((p) => p.scope === scope);
-  for (const plugin of scoped) {
+  for (const plugin of registry.list()) {
     if (!plugin.pluginDir.startsWith(dir)) continue;
     const specExists = fs.existsSync(path.join(plugin.pluginDir, 'plugin.spec.json'));
     if (!specExists) {
@@ -80,10 +71,6 @@ function rescanPluginsDir(dir: string, scope: 'local' | 'global'): void {
 }
 
 function ensurePluginsDirs(cwd: string): void {
-  try {
-    const globalDir = getGlobalPluginsDir();
-    if (!fs.existsSync(globalDir)) fs.mkdirSync(globalDir, { recursive: true });
-  } catch { /* non-fatal */ }
   try {
     const localDir = getLocalPluginsDir(cwd);
     if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
@@ -97,8 +84,7 @@ function getEffectiveCwd(fallbackCwd: string): string {
 
 function loadRegistryFromDisk(cwd: string): void {
   ensurePluginsDirs(cwd);
-  loadDirIntoRegistry(getGlobalPluginsDir(), 'global');
-  loadDirIntoRegistry(getLocalPluginsDir(cwd), 'local');
+  loadDirIntoRegistry(getLocalPluginsDir(cwd));
 }
 
 function broadcastPluginsChanged(): void {
@@ -125,15 +111,15 @@ function broadcastDataChanged(): void {
   }
 }
 
-// Clears local plugins and reloads from the new workspace directory.
+// Clears all plugins and reloads from the new workspace directory.
 // No-op if the workspace hasn't changed.
-function refreshLocalPlugins(cwd: string): void {
+function refreshPlugins(cwd: string): void {
   const localDir = getLocalPluginsDir(cwd);
   if (lastLocalDir === localDir) return;
-  registry.clearLocalPlugins();
+  registry.clearPlugins();
   lastLocalDir = localDir;
   ensurePluginsDirs(cwd);
-  loadDirIntoRegistry(localDir, 'local');
+  loadDirIntoRegistry(localDir);
   // Re-watch local plugins dir for add/remove changes.
   // On any filesystem event, rescan the directory to register newly added
   // plugins (e.g. created by MCP aide_create_plugin at runtime) and drop
@@ -142,7 +128,7 @@ function refreshLocalPlugins(cwd: string): void {
   localPluginsWatcher = chokidar
     .watch(localDir, { ignoreInitial: true, depth: 2, ignored: WATCHER_EXCLUSIONS })
     .on('all', () => {
-      rescanPluginsDir(localDir, 'local');
+      rescanPluginsDir(localDir);
       broadcastPluginsChanged();
     });
   // Re-watch local plugins dir for index.html changes (debounced 300ms)
@@ -203,30 +189,6 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
   // Broadcast existing plugins immediately so the UI shows them on launch
   broadcastPluginsChanged();
 
-  // Watch global plugins dir for add/remove changes.
-  // Rescan on any event so runtime-added plugins become visible without restart.
-  const globalDir = getGlobalPluginsDir();
-  chokidar
-    .watch(globalDir, { ignoreInitial: true, depth: 2, ignored: WATCHER_EXCLUSIONS })
-    .on('all', () => {
-      rescanPluginsDir(globalDir, 'global');
-      broadcastPluginsChanged();
-    });
-
-  // Watch global plugins dir for index.html changes (debounced 300ms)
-  const htmlDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  chokidar
-    .watch(path.join(globalDir, '**/index.html'), { ignoreInitial: true, ignored: WATCHER_EXCLUSIONS })
-    .on('change', (filePath: string) => {
-      const pluginName = path.basename(path.dirname(filePath));
-      const existing = htmlDebounceTimers.get(pluginName);
-      if (existing) clearTimeout(existing);
-      htmlDebounceTimers.set(pluginName, setTimeout(() => {
-        htmlDebounceTimers.delete(pluginName);
-        broadcastHtmlChanged(pluginName);
-      }, 300));
-    });
-
   // Spec-only: generate and return spec without writing to disk
   ipcMain.handle(IPC_CHANNELS.PLUGIN_GENERATE_SPEC, async (_event, name: string, description: string) => {
     return generatePluginSpec(name, description);
@@ -241,7 +203,7 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
     const pluginDir = path.join(localDir, spec.name);
     try {
       generatePluginCode(spec, pluginDir);
-      registry.register(spec, pluginDir, 'local');
+      registry.register(spec, pluginDir);
     } catch (err) {
       // Cleanup orphaned files on pipeline failure
       if (fs.existsSync(pluginDir)) {
@@ -254,13 +216,10 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
 
   ipcMain.handle(IPC_CHANNELS.PLUGIN_LIST, async () => {
     const effectiveCwd = getEffectiveCwd(cwd);
-    // Clears stale local plugins when workspace changes, then reloads from current workspace
-    refreshLocalPlugins(effectiveCwd);
-    // Self-healing: rescan both scopes so plugins added at runtime (e.g. global
-    // plugins installed via MCP or a file manager after startup) become visible
-    // without restarting the app.
-    rescanPluginsDir(getGlobalPluginsDir(), 'global');
-    rescanPluginsDir(getLocalPluginsDir(effectiveCwd), 'local');
+    // Clears stale plugins when workspace changes, then reloads from current workspace
+    refreshPlugins(effectiveCwd);
+    // Self-healing: rescan so plugins added at runtime become visible without restart
+    rescanPluginsDir(getLocalPluginsDir(effectiveCwd));
     return registry.list();
   });
 
@@ -300,18 +259,17 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
     // Fallback: scan filesystem — plugin may be installed but not activated (OFF)
     if (!pluginDir) {
       const effectiveCwd = getEffectiveCwd(cwd);
-      for (const dir of [getLocalPluginsDir(effectiveCwd), getGlobalPluginsDir()]) {
-        if (!fs.existsSync(dir)) continue;
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const localDir = getLocalPluginsDir(effectiveCwd);
+      if (fs.existsSync(localDir)) {
+        for (const entry of fs.readdirSync(localDir, { withFileTypes: true })) {
           if (!entry.isDirectory()) continue;
-          const candidate = path.join(dir, entry.name);
+          const candidate = path.join(localDir, entry.name);
           const spec = readPluginSpec(candidate);
           if (spec && (spec.id === pluginId || spec.name === pluginId)) {
             pluginDir = candidate;
             break;
           }
         }
-        if (pluginDir) break;
       }
     }
 
@@ -330,7 +288,7 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
     const freshSpec = readPluginSpec(plugin.pluginDir);
     if (freshSpec) {
       registry.unregister(pluginId);
-      registry.register(freshSpec, plugin.pluginDir, plugin.scope);
+      registry.register(freshSpec, plugin.pluginDir);
       if (wasActive) {
         const effectiveCwd = getEffectiveCwd(cwd);
         registry.activate(freshSpec.id, effectiveCwd);
@@ -342,20 +300,12 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
 
   ipcMain.handle(IPC_CHANNELS.PLUGIN_DELETE, async (_event, pluginName: string) => {
     const effectiveCwd = getEffectiveCwd(cwd);
-    // Search local first, then global
     const localDir = getLocalPluginsDir(effectiveCwd);
-    const globalDir = getGlobalPluginsDir();
 
-    let pluginDir = path.join(localDir, pluginName);
-    let baseDir = localDir;
+    const pluginDir = path.join(localDir, pluginName);
 
-    if (!fs.existsSync(pluginDir)) {
-      pluginDir = path.join(globalDir, pluginName);
-      baseDir = globalDir;
-    }
-
-    // Prevent path traversal — pluginDir must be inside baseDir
-    if (!pluginDir.startsWith(baseDir + path.sep)) {
+    // Prevent path traversal — pluginDir must be inside localDir
+    if (!pluginDir.startsWith(localDir + path.sep)) {
       throw new Error('Invalid plugin name');
     }
 
