@@ -110,15 +110,28 @@ function broadcastToRenderer(webContentsId: number, channel: string, ...args: un
   }
 }
 
-export function killAllSessions(): void {
-  for (const [, session] of sessions) {
+export async function killAllSessions(): Promise<void> {
+  const snapshot = Array.from(sessions.values());
+  const pending = snapshot.map((session) => {
     if (session.sessionDetectTimer) clearInterval(session.sessionDetectTimer);
-    try {
-      session.pty.kill();
-    } catch {
-      // Ignore errors — process may already be dead
-    }
-  }
+    return new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      try {
+        session.pty.onExit(() => done());
+      } catch {
+        done();
+        return;
+      }
+      try { session.pty.kill(); } catch { /* already dead */ }
+      setTimeout(done, 500);
+    });
+  });
+  await Promise.allSettled(pending);
   sessions.clear();
 }
 
@@ -143,7 +156,7 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
         'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE',
         'SHELL', 'TERM', 'TMPDIR', 'XDG_RUNTIME_DIR',
         'NVM_DIR',  // needed for shell tabs to initialize nvm via .zshrc
-        'AIDE_PLUGINS_DIR', 'AIDE_WORKSPACE',
+        'AIDE_WORKSPACE',
       ];
       for (const key of allowedKeys) {
         if (process.env[key]) safeBaseEnv[key] = process.env[key] as string;

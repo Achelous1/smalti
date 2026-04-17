@@ -9,7 +9,6 @@ interface RegisteredPlugin {
   sandbox: PluginSandbox | null;
   active: boolean;
   pluginDir: string;
-  scope: 'local' | 'global';
 }
 
 interface RegisteredTool {
@@ -26,13 +25,12 @@ export class PluginRegistry {
     this.emitterFactory = factory;
   }
 
-  register(spec: PluginSpec, pluginDir: string, scope: 'local' | 'global' = 'local'): void {
+  register(spec: PluginSpec, pluginDir: string): void {
     this.plugins.set(spec.id, {
       spec,
       sandbox: new PluginSandbox(pluginDir, spec),
       active: false,
       pluginDir,
-      scope,
     });
   }
 
@@ -89,11 +87,10 @@ export class PluginRegistry {
     return true;
   }
 
-  list(): Array<PluginSpec & { active: boolean; scope: 'local' | 'global'; pluginDir: string }> {
+  list(): Array<PluginSpec & { active: boolean; pluginDir: string }> {
     return Array.from(this.plugins.values()).map((p) => ({
       ...p.spec,
       active: p.active,
-      scope: p.scope,
       pluginDir: p.pluginDir,
     }));
   }
@@ -102,9 +99,8 @@ export class PluginRegistry {
     return this.plugins.get(id);
   }
 
-  clearLocalPlugins(): void {
+  clearPlugins(): void {
     for (const [id, plugin] of this.plugins) {
-      if (plugin.scope !== 'local') continue;
       if (plugin.active && plugin.sandbox) {
         plugin.sandbox.stop();
       }

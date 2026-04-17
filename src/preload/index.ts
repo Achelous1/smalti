@@ -161,6 +161,13 @@ const aideAPI: AideAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_WRITE, settings),
   },
 
+  appSettings: {
+    get: (): Promise<{ theme: 'dark' | 'light'; windowBounds: { x: number; y: number; width: number; height: number } | null }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_SETTINGS_GET),
+    set: (key: string, value: unknown): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.APP_SETTINGS_SET, key, value),
+  },
+
   session: {
     save: (session: SavedSession): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_SAVE, session),
@@ -197,6 +204,8 @@ const aideAPI: AideAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_INFO),
     download: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.UPDATER_DOWNLOAD),
+    install: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.UPDATER_INSTALL),
     onChanged: (callback: (info: UpdateInfo | null) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, info: UpdateInfo | null) =>
         callback(info);

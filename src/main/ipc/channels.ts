@@ -48,6 +48,10 @@ export const IPC_CHANNELS = {
   SETTINGS_READ: 'settings:read',
   SETTINGS_WRITE: 'settings:write',
 
+  // App Settings (global, not workspace-scoped)
+  APP_SETTINGS_GET: 'app-settings:get',
+  APP_SETTINGS_SET: 'app-settings:set',
+
   // Files (main → renderer push)
   FILES_REVEAL: 'files:reveal',
   FILES_SELECT: 'files:select',
@@ -65,6 +69,7 @@ export const IPC_CHANNELS = {
   // Updater
   UPDATER_CHECK: 'updater:check',
   UPDATER_DOWNLOAD: 'updater:download',
+  UPDATER_INSTALL: 'updater:install',
   UPDATER_INFO_CHANGED: 'updater:info-changed',
   UPDATER_GET_INFO: 'updater:get-info',
 

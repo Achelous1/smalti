@@ -60,7 +60,7 @@ export function getMcpServerPath(): string {
  * Shared helper: merges the AIDE MCP server entry into a JSON config file.
  * Safe to call multiple times — merges rather than overwrites.
  */
-function registerJsonMcpConfig(configPath: string, nodePath: string, serverPath: string, globalPluginsDir: string): void {
+function registerJsonMcpConfig(configPath: string, nodePath: string, serverPath: string): void {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   let config: Record<string, unknown> = {};
   if (fs.existsSync(configPath)) {
@@ -76,9 +76,6 @@ function registerJsonMcpConfig(configPath: string, nodePath: string, serverPath:
   (config.mcpServers as Record<string, unknown>)['aide'] = {
     command: nodePath,
     args: [serverPath],
-    // Global registration only sets AIDE_GLOBAL_PLUGINS_DIR.
-    // AIDE_PLUGINS_DIR and AIDE_WORKSPACE are workspace-specific and set via --mcp-config.
-    env: { AIDE_GLOBAL_PLUGINS_DIR: globalPluginsDir },
   };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -105,33 +102,21 @@ function removeTomlSection(content: string, sectionHeader: string): string {
 
 export function writeMcpConfig(workspacePath: string): string {
   const home = getHome();
-  const globalPluginsDir = path.join(home, '.aide', 'plugins');
-  const localPluginsDir = path.join(workspacePath, '.aide', 'plugins');
   const nodePath = resolveNodePath();
   const serverPath = getMcpServerPath();
 
-  // Global dir is under HOME — always writable. Local dir lives inside the
-  // workspace and may be permission-restricted (macOS TCC). Isolate failures
-  // so a restricted workspace doesn't skip global MCP registration.
-  try { fs.mkdirSync(globalPluginsDir, { recursive: true }); } catch (err) {
-    console.warn('[AIDE] Could not create global plugins dir:', (err as Error).message);
-  }
-  try { fs.mkdirSync(localPluginsDir, { recursive: true }); } catch (err) {
-    console.warn('[AIDE] Could not create local plugins dir:', (err as Error).message);
-  }
-
   writeMcpServerScript();
 
-  // Register in ~/.claude.json (Claude uses --mcp-config per-workspace; global is a fallback)
+  // Register in ~/.claude.json (Claude uses --mcp-config per-workspace; this is a fallback)
   try {
-    registerJsonMcpConfig(path.join(home, '.claude.json'), nodePath, serverPath, globalPluginsDir);
+    registerJsonMcpConfig(path.join(home, '.claude.json'), nodePath, serverPath);
   } catch (err) {
     console.warn('[AIDE] Failed to register Claude MCP config:', (err as Error).message);
   }
 
   // Register in ~/.gemini/settings.json (Gemini has no --mcp-config flag)
   try {
-    registerJsonMcpConfig(path.join(home, '.gemini', 'settings.json'), nodePath, serverPath, globalPluginsDir);
+    registerJsonMcpConfig(path.join(home, '.gemini', 'settings.json'), nodePath, serverPath);
   } catch (err) {
     console.warn('[AIDE] Failed to register Gemini MCP config:', (err as Error).message);
   }
@@ -143,7 +128,7 @@ export function writeMcpConfig(workspacePath: string): string {
     let content = fs.existsSync(codexConfigPath) ? fs.readFileSync(codexConfigPath, 'utf-8') : '';
     content = removeTomlSection(content, '[mcp_servers.aide]');
     const prefix = content.trimEnd();
-    const block = `[mcp_servers.aide]\ncommand = ${JSON.stringify(nodePath)}\nargs = [${JSON.stringify(serverPath)}]\nenv = { AIDE_GLOBAL_PLUGINS_DIR = ${JSON.stringify(globalPluginsDir)} }\n`;
+    const block = `[mcp_servers.aide]\ncommand = ${JSON.stringify(nodePath)}\nargs = [${JSON.stringify(serverPath)}]\n`;
     fs.writeFileSync(codexConfigPath, prefix.length > 0 ? `${prefix}\n\n${block}` : block);
   } catch (err) {
     console.warn('[AIDE] Failed to register Codex MCP config:', (err as Error).message);
@@ -155,8 +140,6 @@ export function writeMcpConfig(workspacePath: string): string {
         command: 'node',
         args: [getMcpServerPath()],
         env: {
-          AIDE_GLOBAL_PLUGINS_DIR: globalPluginsDir,
-          AIDE_PLUGINS_DIR: localPluginsDir,
           AIDE_WORKSPACE: workspacePath,
         },
       },
@@ -165,28 +148,6 @@ export function writeMcpConfig(workspacePath: string): string {
 
   const mcpConfigPath = getMcpConfigPath();
   fs.writeFileSync(mcpConfigPath, JSON.stringify(config, null, 2));
-
-  // Write project-level .mcp.json at workspace root so Claude Code CLI auto-detects
-  // workspace-specific env vars (AIDE_WORKSPACE, AIDE_PLUGINS_DIR) when running in the project.
-  try {
-    const projectMcpPath = path.join(workspacePath, '.mcp.json');
-    const projectConfig = {
-      mcpServers: {
-        aide: {
-          command: nodePath,
-          args: [serverPath],
-          env: {
-            AIDE_GLOBAL_PLUGINS_DIR: globalPluginsDir,
-            AIDE_PLUGINS_DIR: localPluginsDir,
-            AIDE_WORKSPACE: workspacePath,
-          },
-        },
-      },
-    };
-    fs.writeFileSync(projectMcpPath, JSON.stringify(projectConfig, null, 2));
-  } catch (err) {
-    console.warn('[AIDE] Failed to write project .mcp.json:', (err as Error).message);
-  }
 
   return mcpConfigPath;
 }

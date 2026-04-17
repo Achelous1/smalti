@@ -22,64 +22,42 @@ describe('PluginRegistry', () => {
   });
 
   describe('register / list', () => {
-    it('lists registered plugins with scope', () => {
-      registry.register(makeSpec('id-1', 'local-plugin'), '/tmp/local-plugin', 'local');
-      registry.register(makeSpec('id-2', 'global-plugin'), '/tmp/global-plugin', 'global');
+    it('lists registered plugins', () => {
+      registry.register(makeSpec('id-1', 'plugin-a'), '/tmp/plugin-a');
+      registry.register(makeSpec('id-2', 'plugin-b'), '/tmp/plugin-b');
       const list = registry.list();
       expect(list).toHaveLength(2);
-      expect(list.find((p) => p.id === 'id-1')?.scope).toBe('local');
-      expect(list.find((p) => p.id === 'id-2')?.scope).toBe('global');
+      expect(list.find((p) => p.id === 'id-1')).toBeDefined();
+      expect(list.find((p) => p.id === 'id-2')).toBeDefined();
     });
   });
 
-  describe('clearLocalPlugins', () => {
-    it('removes all local plugins and keeps global plugins', () => {
-      registry.register(makeSpec('local-1', 'local-a'), '/tmp/local-a', 'local');
-      registry.register(makeSpec('local-2', 'local-b'), '/tmp/local-b', 'local');
-      registry.register(makeSpec('global-1', 'global-a'), '/tmp/global-a', 'global');
+  describe('clearPlugins', () => {
+    it('removes all plugins', () => {
+      registry.register(makeSpec('id-1', 'plugin-a'), '/tmp/plugin-a');
+      registry.register(makeSpec('id-2', 'plugin-b'), '/tmp/plugin-b');
 
-      registry.clearLocalPlugins();
+      registry.clearPlugins();
 
-      const list = registry.list();
-      expect(list).toHaveLength(1);
-      expect(list[0].id).toBe('global-1');
-      expect(list[0].scope).toBe('global');
-    });
-
-    it('is a no-op when there are no local plugins', () => {
-      registry.register(makeSpec('global-1', 'global-a'), '/tmp/global-a', 'global');
-      expect(() => registry.clearLocalPlugins()).not.toThrow();
-      expect(registry.list()).toHaveLength(1);
-    });
-
-    it('is a no-op on an empty registry', () => {
-      expect(() => registry.clearLocalPlugins()).not.toThrow();
       expect(registry.list()).toHaveLength(0);
     });
 
-    it('allows re-registering local plugins after clearing', () => {
-      registry.register(makeSpec('local-1', 'local-a'), '/tmp/local-a', 'local');
-      registry.clearLocalPlugins();
-      registry.register(makeSpec('local-1', 'local-a'), '/tmp/local-a', 'local');
-      expect(registry.list()).toHaveLength(1);
-      expect(registry.list()[0].scope).toBe('local');
+    it('is a no-op on an empty registry', () => {
+      expect(() => registry.clearPlugins()).not.toThrow();
+      expect(registry.list()).toHaveLength(0);
     });
 
-    it('does not affect active status of global plugins', () => {
-      registry.register(makeSpec('local-1', 'local-a'), '/tmp/local-a', 'local');
-      registry.register(makeSpec('global-1', 'global-a'), '/tmp/global-a', 'global');
-
-      registry.clearLocalPlugins();
-
-      const global = registry.list().find((p) => p.id === 'global-1');
-      expect(global).toBeDefined();
-      expect(global?.active).toBe(false);
+    it('allows re-registering plugins after clearing', () => {
+      registry.register(makeSpec('id-1', 'plugin-a'), '/tmp/plugin-a');
+      registry.clearPlugins();
+      registry.register(makeSpec('id-1', 'plugin-a'), '/tmp/plugin-a');
+      expect(registry.list()).toHaveLength(1);
     });
   });
 
   describe('unregister', () => {
     it('removes a plugin by id', () => {
-      registry.register(makeSpec('id-1', 'plugin-a'), '/tmp/plugin-a', 'local');
+      registry.register(makeSpec('id-1', 'plugin-a'), '/tmp/plugin-a');
       registry.unregister('id-1');
       expect(registry.list()).toHaveLength(0);
     });

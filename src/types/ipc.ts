@@ -30,7 +30,6 @@ export interface PluginInfo {
   version: string;
   description: string;
   active: boolean;
-  scope: 'local' | 'global';
   tools: PluginTool[];
   /** File extensions this plugin handles, e.g. ['.json', '.yaml'] */
   fileAssociations?: string[];
@@ -233,6 +232,8 @@ export interface UpdateInfo {
   hasUpdate: boolean;
   /** Download URL of the macOS DMG asset, if present */
   downloadUrl: string | null;
+  /** Download URL of the .app.zip asset for in-place auto-install, if present */
+  zipDownloadUrl: string | null;
   /** Human-readable release name */
   releaseName: string | null;
   /** Web URL of the release page (fallback for non-DMG platforms) */
@@ -307,6 +308,10 @@ export interface AideAPI {
     read(): Promise<WorkspaceSettings>;
     write(settings: WorkspaceSettings): Promise<void>;
   };
+  appSettings: {
+    get(): Promise<{ theme: 'dark' | 'light'; windowBounds: { x: number; y: number; width: number; height: number } | null }>;
+    set(key: string, value: unknown): Promise<void>;
+  };
   files: {
     onReveal(callback: (filePath: string) => void): () => void;
     onSelect(callback: (filePath: string) => void): () => void;
@@ -326,6 +331,7 @@ export interface AideAPI {
     check(): Promise<UpdateInfo | null>;
     getInfo(): Promise<UpdateInfo | null>;
     download(): Promise<{ ok: boolean; path?: string; error?: string }>;
+    install(): Promise<{ ok: boolean; error?: string }>;
     onChanged(callback: (info: UpdateInfo | null) => void): () => void;
   };
 }

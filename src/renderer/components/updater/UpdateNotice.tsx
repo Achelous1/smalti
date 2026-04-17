@@ -16,49 +16,70 @@ export function UpdateNotice({ collapsed = false }: Props) {
 
   if (!info?.hasUpdate) return null;
 
-  const handleDownload = async () => {
+  const canAutoInstall = !!info.zipDownloadUrl;
+
+  const handleAction = async () => {
     if (downloading) return;
     setDownloading(true);
     try {
-      await window.aide.updater.download();
-    } finally {
+      if (canAutoInstall) {
+        await window.aide.updater.install();
+      } else {
+        await window.aide.updater.download();
+        setDownloading(false);
+      }
+    } catch {
       setDownloading(false);
     }
   };
 
   if (collapsed) {
     return (
-      <div className="update-notice-enter flex items-center justify-center w-12 h-12 border-t border-aide-border">
+      <div className="shrink-0 flex items-center justify-center w-full border-t border-aide-border pt-2">
         <button
-          onClick={handleDownload}
+          onClick={handleAction}
           disabled={downloading}
-          title={`Update available — ${info.latestTag}`}
-          className="w-7 h-7 rounded flex items-center justify-center bg-aide-accent text-aide-terminal-bg hover:opacity-85 transition-opacity disabled:opacity-50"
+          title={`${canAutoInstall ? 'Install update' : 'Download update'} — ${info.latestTag}`}
+          className="w-7 h-7 rounded-[6px] flex items-center justify-center bg-aide-accent text-aide-terminal-bg hover:opacity-85 transition-opacity disabled:opacity-50 text-[11px]"
         >
-          ⬇
+          ↑
         </button>
       </div>
     );
   }
 
+  const currentLabel = `v${info.currentVersion}`;
+  const nextLabel = info.latestTag.startsWith('v') ? info.latestTag : `v${info.latestTag}`;
+  const actionLabel = downloading
+    ? canAutoInstall ? 'Installing…' : 'Downloading…'
+    : canAutoInstall ? 'Install & Restart' : 'Download';
+
   return (
-    <div className="update-notice-enter flex items-center gap-2.5 px-3 py-3 border-t border-aide-border bg-aide-surface-sidebar">
-      <div className="flex flex-col flex-1 min-w-0 gap-0.5">
-        <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-aide-accent">
-          ⬆ {downloading ? 'Downloading...' : 'Update available'}
-        </span>
-        <span className="text-[13px] font-mono font-bold text-aide-text-primary truncate">
-          {info.latestTag}
-        </span>
+    <div className="shrink-0 border-t border-aide-border bg-aide-surface-sidebar">
+      <div className="px-3 pt-2.5 pb-3 flex flex-col gap-2">
+        {/* Header row */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-aide-accent leading-none">
+            ↑ Update available
+          </span>
+        </div>
+
+        {/* Version transition */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-mono text-aide-text-tertiary">{currentLabel}</span>
+          <span className="text-[10px] text-aide-text-tertiary">→</span>
+          <span className="text-[11px] font-mono font-bold text-aide-text-primary">{nextLabel}</span>
+        </div>
+
+        {/* Action button */}
+        <button
+          onClick={handleAction}
+          disabled={downloading}
+          className="w-full h-7 rounded flex items-center justify-center bg-aide-accent text-aide-terminal-bg text-[11px] font-bold font-mono hover:opacity-85 transition-opacity disabled:opacity-60 whitespace-nowrap"
+        >
+          {actionLabel}
+        </button>
       </div>
-      <button
-        onClick={handleDownload}
-        disabled={downloading}
-        title={`Download ${info.latestTag}`}
-        className="shrink-0 w-7 h-7 rounded flex items-center justify-center bg-aide-accent text-aide-terminal-bg text-[13px] font-bold hover:opacity-85 transition-opacity disabled:opacity-50"
-      >
-        ⬇
-      </button>
     </div>
   );
 }

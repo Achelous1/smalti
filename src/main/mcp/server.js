@@ -5,7 +5,6 @@ const path = require("path");
 const vm = require("vm");
 const crypto = require("crypto");
 
-const GLOBAL_PLUGINS_DIR = process.env.AIDE_GLOBAL_PLUGINS_DIR || "";
 function safeCwd() {
   // process.cwd() throws EPERM in packaged Electron apps when launched from Finder
   // (HOME=/ or unmounted cwd). Fall back to HOME / getpwuid / /tmp.
@@ -14,7 +13,7 @@ function safeCwd() {
   try { return require("os").userInfo().homedir; } catch { /* ignore */ }
   return "/tmp";
 }
-const PLUGINS_DIR = process.env.AIDE_PLUGINS_DIR || path.join(safeCwd(), ".aide", "plugins");
+const PLUGINS_DIR = path.join(safeCwd(), ".aide", "plugins");
 const WORKSPACE = process.env.AIDE_WORKSPACE || safeCwd();
 
 function send(msg) {
@@ -36,13 +35,7 @@ function scanPluginsDir(dir) {
 }
 
 function listPluginSpecs() {
-  const globalSpecs = scanPluginsDir(GLOBAL_PLUGINS_DIR);
-  const localSpecs = scanPluginsDir(PLUGINS_DIR);
-  // Merge: local overrides global if same name
-  const byName = new Map();
-  for (const s of globalSpecs) byName.set(s.name, s);
-  for (const s of localSpecs) byName.set(s.name, s);
-  return Array.from(byName.values());
+  return scanPluginsDir(PLUGINS_DIR);
 }
 
 // Fix #1: Read spec.entryPoint instead of hardcoding "src/index.js"
@@ -57,21 +50,6 @@ function resolvePluginDir(pluginName) {
           const entryPoint = spec.entryPoint || "src/index.js";
           if (fs.existsSync(path.join(localDir, entryPoint))) {
             return { dir: localDir, base: PLUGINS_DIR, entryPoint };
-          }
-        } catch {}
-      }
-    }
-  }
-  if (GLOBAL_PLUGINS_DIR) {
-    const globalDir = path.join(GLOBAL_PLUGINS_DIR, pluginName);
-    if (path.resolve(globalDir).startsWith(path.resolve(GLOBAL_PLUGINS_DIR) + path.sep)) {
-      const specPath = path.join(globalDir, "plugin.spec.json");
-      if (fs.existsSync(specPath)) {
-        try {
-          const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
-          const entryPoint = spec.entryPoint || "src/index.js";
-          if (fs.existsSync(path.join(globalDir, entryPoint))) {
-            return { dir: globalDir, base: GLOBAL_PLUGINS_DIR, entryPoint };
           }
         } catch {}
       }
@@ -133,10 +111,7 @@ function invokePluginTool(pluginName, toolName, args) {
 }
 
 function createPlugin(params) {
-  const scope = params.scope;
-  if (!scope) throw new Error("scope is required. Ask the user whether they want the plugin installed globally (~/.aide/plugins, shared across all workspaces) or locally ({workspace}/.aide/plugins, only in the current project) before calling this tool.");
-  const baseDir = scope === "global" ? GLOBAL_PLUGINS_DIR : PLUGINS_DIR;
-  if (!baseDir) throw new Error(scope === "global" ? "AIDE_GLOBAL_PLUGINS_DIR not set" : "AIDE_PLUGINS_DIR not set");
+  const baseDir = PLUGINS_DIR;
   const safeName = params.name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
   const pluginDir = path.join(baseDir, safeName);
   if (!path.resolve(pluginDir).startsWith(path.resolve(baseDir))) throw new Error("Invalid plugin name");
@@ -213,13 +188,7 @@ function editPlugin(params) {
   return spec;
 }
 
-// Fix #4: corrected description (removed copy-paste error at end of CDN section)
-// Fix #5: updated shim docs (auto-injected, no manual inclusion needed)
-// Fix #3: added fileAssociations to inputSchemas
-// Fix #6: scope required in aide_delete_plugin
-const CREATE_PLUGIN_DESC = `IMPORTANT: Before calling this tool, you MUST ask the user whether they want the plugin installed globally (~/.aide/plugins, shared across all workspaces) or locally ({workspace}/.aide/plugins, only in the current project). Do not assume a default — always wait for the user's explicit answer.
-
-Create a new AIDE plugin from code. The code must be a CommonJS module exporting { name, version, tools, invoke(toolName, args) }.
+const CREATE_PLUGIN_DESC = `Create a new AIDE plugin from code. Plugins are installed in the workspace ({workspace}/.aide/plugins). The code must be a CommonJS module exporting { name, version, tools, invoke(toolName, args) }.
 
 Sandbox Environment:
 - require('path') → always available
@@ -249,6 +218,13 @@ Available iframe APIs:
 window.aide shim:
 AIDE automatically injects the window.aide shim into all plugin iframes — both auto-generated and custom HTML. You do NOT need to include the shim manually in custom HTML.
 
+Theme sync API:
+  window.aide is automatically notified of theme changes via postMessage. Additionally you can listen:
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.theme) { /* e.data.theme === 'dark' | 'light' */ }
+    });
+  In most cases you don't need this — the CSS variables handle it.
+
 Events fire on every file click — eventBindings are NOT required for iframe postMessage:
   window.aide.on('file:clicked', function(data) { /* data.filePath — absolute path */ })
   window.aide.on('file:right-clicked', function(data) { /* data.filePath */ })
@@ -262,6 +238,24 @@ Invoking backend tools from iframe:
 
 eventBindings (.aide/settings.json): controls backend tool invocation on file events only — separate from iframe postMessage.
   Example: { "eventBindings": { "file:clicked": [{ "plugin": "my-plugin", "tool": "on-file-clicked", "args": {} }] } }
+
+Theme Support (REQUIRED):
+AIDE runs in both dark and light themes. Your plugin MUST work in both.
+
+CSS variables are AUTO-INJECTED into every plugin iframe by AIDE — you do NOT need to define :root, .light, or @media(prefers-color-scheme) blocks yourself. Just reference the variables:
+
+  background: var(--background);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  color: var(--accent);
+
+Runtime theme switching:
+AIDE sends postMessage({theme: 'dark'|'light'}) to the plugin iframe whenever the user toggles theme. The injected shim automatically updates document.documentElement.className, which triggers the .light class variables. Your CSS will re-render without any code on your side — provided you used var() references, not hardcoded colors.
+
+Detecting current theme from JS:
+  const isLight = document.documentElement.classList.contains('light');
+
+NEVER hardcode colors like #000, #fff, black, white, or any hex literal for UI surfaces. Always use the CSS variables below. Hardcoding will break one of the two themes.
 
 IMPORTANT — AIDE Design System Rules:
 If the plugin produces UI output (HTML/CSS), it MUST use these CSS custom properties (not hardcoded colors):
@@ -288,6 +282,7 @@ Style rules:
 - Spacing: 4px/8px/12px increments (Tailwind-compatible)
 - Never use hardcoded hex colors — always reference CSS variables
 - Element visibility: always set explicit display values (e.g. style.display = 'block', 'flex', 'grid') when showing hidden elements — never use style.display = '' because a CSS stylesheet display:none will persist
+- Dark/light parity: test both themes mentally before finalizing. If a color looks good on dark but unreadable on light (or vice versa), you've used the wrong variable. Example: buttons use var(--accent) for bg + #000 for text — this works because --accent differs per theme but black text stays readable on emerald in both.
 
 CDN Libraries (OFFLINE-CAPABLE):
 Plugins can load external libraries via the aide-cdn:// protocol, which caches files locally for offline use.
@@ -318,10 +313,9 @@ function getBuiltinTools() {
           permissions: { type: "array", items: { type: "string" }, description: "Required permissions: fs:read, fs:write, network, process" },
           tools: { type: "array", description: "Tool definitions the plugin exposes", items: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, parameters: { type: "object" } } } },
           html: { type: "string", description: "Optional custom index.html for the plugin iframe UI. If omitted, a default UI is auto-generated. The window.aide shim (on, invoke, emit, theme) is automatically injected by AIDE into all iframes — you do not need to include it manually." },
-          scope: { type: "string", enum: ["global", "local"], description: "Where to install: global (~/.aide/plugins, shared across all workspaces) or local ({workspace}/.aide/plugins, only in the current project). Must be explicitly chosen by the user." },
           fileAssociations: { type: "array", items: { type: "string" }, description: "File extensions or glob patterns this plugin handles (e.g. [\".html\", \".css\", \"*.json\"]). Used to associate the plugin with file types in the file tree." }
         },
-        required: ["name", "description", "code", "scope"]
+        required: ["name", "description", "code"]
       }
     },
     {
@@ -352,16 +346,14 @@ function getBuiltinTools() {
       }
     },
     {
-      // Fix #6: scope is now required (consistent with aide_create_plugin)
       name: "aide_delete_plugin",
       description: "Delete an installed AIDE plugin.",
       inputSchema: {
         type: "object",
         properties: {
-          plugin_name: { type: "string" },
-          scope: { type: "string", enum: ["global", "local"], description: "Which scope to delete from: global (~/.aide/plugins) or local ({workspace}/.aide/plugins)." }
+          plugin_name: { type: "string" }
         },
-        required: ["plugin_name", "scope"]
+        required: ["plugin_name"]
       }
     }
   ];
@@ -401,13 +393,8 @@ function handleRequest(method, id, params) {
       } else if (tn === "aide_edit_plugin") {
         sendResult(id, { content: [{ type: "text", text: JSON.stringify(editPlugin(ta), null, 2) }] });
       } else if (tn === "aide_delete_plugin") {
-        // Fix #6: scope is required — no default fallback
-        const scope = ta.scope;
-        if (!scope) throw new Error("scope is required: 'global' or 'local'");
-        const baseDir = scope === "global" ? GLOBAL_PLUGINS_DIR : PLUGINS_DIR;
-        if (!baseDir) throw new Error("Plugins directory not configured for scope: " + scope);
-        const dir = path.join(baseDir, ta.plugin_name);
-        if (!path.resolve(dir).startsWith(path.resolve(baseDir) + path.sep)) throw new Error("Invalid plugin name");
+        const dir = path.join(PLUGINS_DIR, ta.plugin_name);
+        if (!path.resolve(dir).startsWith(path.resolve(PLUGINS_DIR) + path.sep)) throw new Error("Invalid plugin name");
         if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
         sendResult(id, { content: [{ type: "text", text: "Deleted plugin: " + ta.plugin_name }] });
       } else if (tn.startsWith("plugin_")) {

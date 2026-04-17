@@ -13,9 +13,6 @@ export function PluginPanel() {
     deletePlugin,
   } = usePluginStore();
 
-  const focusedPaneId = useLayoutStore((s) => s.focusedPaneId);
-  const addTabToPane = useLayoutStore((s) => s.addTabToPane);
-
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,15 +21,19 @@ export function PluginPanel() {
     return unsub;
   }, [loadPlugins]);
 
-  const handleOpenTab = (plugin: typeof plugins[number]) => {
-    const paneId = focusedPaneId ?? useLayoutStore.getState().focusedPaneId;
-    if (!paneId) return;
-    addTabToPane(paneId, {
-      id: `plugin-${plugin.id}-${Date.now()}`,
-      type: 'plugin',
-      pluginId: plugin.id,
-      title: plugin.name,
-    });
+  const handleOpenTab = async (plugin: typeof plugins[number]) => {
+    // Focus existing tab if already open
+    const allPanes = useLayoutStore.getState().getAllPanes();
+    const existing = allPanes
+      .flatMap((pane) => pane.tabs.map((tab) => ({ paneId: pane.id, tab })))
+      .find(({ tab }) => tab.type === 'plugin' && tab.pluginId === plugin.id);
+    if (existing) {
+      useLayoutStore.getState().setActiveTab(existing.paneId, existing.tab.id);
+      return;
+    }
+    // Smart Open: activate (also adds tab via plugin-store.activate) regardless of current state.
+    // activate() is idempotent on already-active plugins and skips tab creation if tab exists.
+    await activate(plugin.id);
   };
 
   const handleDeleteClick = (name: string) => {
@@ -46,8 +47,6 @@ export function PluginPanel() {
   };
 
   const activeCount = plugins.filter((p) => p.active).length;
-  const localPlugins = plugins.filter((p) => p.scope === 'local');
-  const globalPlugins = plugins.filter((p) => p.scope === 'global');
 
   const renderPlugin = (plugin: typeof plugins[number]) => (
     <div
@@ -91,7 +90,7 @@ export function PluginPanel() {
         <button
           onClick={() => handleOpenTab(plugin)}
           className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aide-text-tertiary hover:text-aide-text-primary hover:bg-aide-surface-hover transition-colors"
-          title="Open as tab"
+          title="Open plugin (will activate if off)"
         >
           ↗
         </button>
@@ -145,23 +144,8 @@ export function PluginPanel() {
         )}
 
         {!loading && plugins.length > 0 && (
-          <div className="flex flex-col gap-3 px-2 py-2">
-            {localPlugins.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] uppercase tracking-widest text-aide-text-tertiary font-mono px-1 pb-0.5">
-                  Local
-                </span>
-                {localPlugins.map(renderPlugin)}
-              </div>
-            )}
-            {globalPlugins.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] uppercase tracking-widest text-aide-text-tertiary font-mono px-1 pb-0.5">
-                  Global
-                </span>
-                {globalPlugins.map(renderPlugin)}
-              </div>
-            )}
+          <div className="flex flex-col gap-1 px-2 py-2">
+            {plugins.map(renderPlugin)}
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
-import * as fs from 'fs';
+
 import { userInfo } from 'os';
 import path from 'path';
 import { fixPackagedEnv } from './fix-env';
@@ -12,6 +12,7 @@ import { registerGithubHandlers } from './ipc/github-handlers';
 import { registerPluginHandlers } from './ipc/plugin-handlers';
 import { registerSettingsHandlers } from './ipc/settings-handlers';
 import { registerSessionHandlers } from './ipc/session-handlers';
+import { registerAppSettingsHandlers, getAppSettings, setAppSetting } from './ipc/app-settings-handlers';
 import { registerUpdaterHandlers } from './ipc/updater-handlers';
 import { startUpdatePolling } from './updater/check';
 import { killAllSessions } from './ipc/terminal-handlers';
@@ -30,6 +31,7 @@ registerCustomSchemes();
 // are closed before lstat can read them. Safe to ignore.
 process.on('uncaughtException', (err) => {
   if (err.message?.includes('EBADF') && err.message?.includes('/dev/fd/')) return;
+  if (err.message?.includes('ThreadSafeFunction') || err.message?.includes('Napi::ThreadSafe')) return;
   throw err;
 });
 
@@ -46,9 +48,13 @@ if (process.platform === 'win32') {
 }
 
 const createWindow = (): void => {
+  const { windowBounds } = getAppSettings();
+
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowBounds?.width ?? 1200,
+    height: windowBounds?.height ?? 800,
+    x: windowBounds?.x,
+    y: windowBounds?.y,
     minWidth: 800,
     minHeight: 600,
     title: 'AIDE',
@@ -60,6 +66,19 @@ const createWindow = (): void => {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  // Save window bounds on resize/move (debounced)
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null;
+  const saveBounds = () => {
+    if (boundsTimer) clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => {
+      if (!mainWindow.isDestroyed()) {
+        setAppSetting('windowBounds', mainWindow.getBounds());
+      }
+    }, 500);
+  };
+  mainWindow.on('resize', saveBounds);
+  mainWindow.on('move', saveBounds);
 
   // Load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -76,17 +95,8 @@ const createWindow = (): void => {
 };
 
 app.on('ready', () => {
-  // Ensure global plugin directory exists on startup
-  try {
-    const home = (process.env.HOME && process.env.HOME !== '/') ? process.env.HOME : userInfo().homedir;
-    const globalPluginsDir = path.join(home, '.aide', 'plugins');
-    if (!fs.existsSync(globalPluginsDir)) {
-      fs.mkdirSync(globalPluginsDir, { recursive: true });
-    }
-  } catch (err) {
-    console.error('[AIDE] Plugin directory setup failed (non-fatal):', err);
-  }
   registerIpcHandlers();
+  registerAppSettingsHandlers(ipcMain);
   registerWorkspaceHandlers(ipcMain);
   const fallbackCwd = getHome();
   registerFsHandlers(ipcMain);
@@ -110,9 +120,16 @@ app.on('ready', () => {
   }
 });
 
-app.on('before-quit', () => {
+let isQuitting = false;
+app.on('before-quit', async (event) => {
+  if (isQuitting) return;
+  isQuitting = true;
+  event.preventDefault();
   setWorkspaceWatcher(null);
-  killAllSessions();
+  try {
+    await killAllSessions();
+  } catch { /* ignore */ }
+  app.exit(0);
 });
 
 app.on('window-all-closed', () => {
