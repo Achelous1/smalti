@@ -126,7 +126,6 @@ function DraggableTab({ tab, paneId, isActive, onActivate, onClose, onContextMen
 
 interface PaneViewProps {
   pane: Pane;
-  showHeader?: boolean;
 }
 
 interface ContextMenu {
@@ -135,14 +134,13 @@ interface ContextMenu {
   tabId: string;
 }
 
-export function PaneView({ pane, showHeader = false }: PaneViewProps) {
+export function PaneView({ pane }: PaneViewProps) {
   const focusedPaneId = useLayoutStore((s) => s.focusedPaneId);
   const setFocusedPane = useLayoutStore((s) => s.setFocusedPane);
   const setActiveTab = useLayoutStore((s) => s.setActiveTab);
   const removeTabFromPane = useLayoutStore((s) => s.removeTabFromPane);
   const renameTabInPane = useLayoutStore((s) => s.renameTabInPane);
   const splitPane = useLayoutStore((s) => s.splitPane);
-  const closePaneAndMergeTabs = useLayoutStore((s) => s.closePaneAndMergeTabs);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -197,7 +195,6 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
   const isCrossPaneDrag = draggingSourcePaneId !== null && draggingSourcePaneId !== pane.id;
 
   const isFocused = focusedPaneId === pane.id;
-  const activeTab = pane.tabs.find((t) => t.id === pane.activeTabId) ?? pane.tabs[0];
 
   const handleRenameTab = useCallback((tabId: string, title: string) => {
     renameTabInPane(pane.id, tabId, title);
@@ -265,28 +262,6 @@ export function PaneView({ pane, showHeader = false }: PaneViewProps) {
 
         {dropdownOpen && <AgentDropdown paneId={pane.id} onClose={() => setDropdownOpen(false)} />}
       </div>
-
-      {/* Pane Header (multi-pane mode) */}
-      {showHeader && activeTab && (
-        <div className="flex items-center gap-2 shrink-0 bg-aide-surface px-3 border-b border-aide-border" style={{ height: '28px' }}>
-          {activeTab.type === 'plugin' ? (
-            <span className="text-[12px]" style={{ color: 'var(--accent)' }}>◈</span>
-          ) : (
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: AGENT_COLORS[activeTab.agentId ?? 'shell'] ?? AGENT_COLORS.shell }}
-            />
-          )}
-          <span className="text-[11px] font-mono text-aide-text-secondary truncate flex-1">{activeTab.title}</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); closePaneAndMergeTabs(pane.id); }}
-            className="text-[12px] text-aide-text-tertiary hover:text-aide-text-primary transition-colors leading-none"
-            title="Close pane (merge tabs to sibling)"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* Content area — also a drop zone */}
       <div ref={setDropRefs} data-pane-drop={pane.id} className="flex-1 overflow-hidden relative">

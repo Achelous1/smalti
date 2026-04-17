@@ -30,7 +30,6 @@ export interface PluginInfo {
   version: string;
   description: string;
   active: boolean;
-  scope: 'local' | 'global';
   tools: PluginTool[];
   /** File extensions this plugin handles, e.g. ['.json', '.yaml'] */
   fileAssociations?: string[];
