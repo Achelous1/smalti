@@ -364,11 +364,7 @@ function getBuiltinTools() {
       return {
         name: "plugin_" + p.name + "_" + t.name,
         description: "[Plugin: " + p.name + "] " + t.description,
-        inputSchema: {
-          type: "object",
-          properties: Object.fromEntries(Object.entries(t.parameters).map(function(e) { return [e[0], { type: e[1].type }]; })),
-          required: Object.entries(t.parameters).filter(function(e) { return e[1].required; }).map(function(e) { return e[0]; })
-        }
+        inputSchema: t.parameters
       };
     });
   });
