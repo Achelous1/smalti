@@ -293,7 +293,7 @@ export function WorkspaceNav() {
                     <button
                       key={tab.id}
                       onClick={() => handleSelectTab(ws.id, tab.id)}
-                      className={`flex items-center gap-1.5 w-full pl-6 pr-2 py-1 rounded text-left transition-colors ${
+                      className={`flex items-center gap-1.5 w-full pl-6 pr-2 py-1 rounded text-left transition-colors min-w-0 ${
                         isTabActive ? 'bg-aide-surface-elevated' : 'hover:bg-aide-surface-elevated'
                       }`}
                     >
@@ -302,7 +302,8 @@ export function WorkspaceNav() {
                         <StatusDot status={tabStatus} />
                       </span>
 
-                      {/* Tab title */}
+                      {/* Tab title — sidebar list uses truncate+flex-1 without a min/max-w cap
+                          (different context from editor tab bar which enforces 80px/200px bounds) */}
                       <span className="text-[11px] font-mono text-aide-text-secondary truncate flex-1">
                         {tab.title}
                       </span>
