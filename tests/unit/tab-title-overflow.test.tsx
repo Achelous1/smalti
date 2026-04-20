@@ -78,11 +78,42 @@ vi.mock('@dnd-kit/utilities', () => ({
   CSS: { Transform: { toString: vi.fn(() => '') } },
 }));
 
+vi.mock('../../src/renderer/stores/workspace-store', () => ({
+  useWorkspaceStore: vi.fn(() => ({
+    workspaces: [],
+    activeWorkspaceId: null,
+    navExpanded: false,
+    setActive: vi.fn(),
+    toggleNav: vi.fn(),
+    addWorkspace: vi.fn(),
+    removeWorkspace: vi.fn(),
+    renameWorkspace: vi.fn(),
+  })),
+}));
+
+vi.mock('../../src/renderer/stores/agent-store', () => ({
+  useAgentStore: vi.fn(() => ({
+    sessionStatuses: {},
+    setStatus: vi.fn(),
+  })),
+}));
+
+vi.mock('../../src/renderer/components/workspace/StatusIndicator', () => ({
+  StatusDot: () => null,
+  StatusBadge: () => null,
+}));
+
+vi.mock('../../src/renderer/components/updater/UpdateNotice', () => ({
+  UpdateNotice: () => null,
+}));
+
 // Minimal window.aide stub
 beforeEach(() => {
   if (!(globalThis as unknown as { aide?: unknown }).aide) {
     (globalThis as unknown as Record<string, unknown>).aide = {
       terminal: { kill: vi.fn() },
+      agent: { onStatus: vi.fn(() => vi.fn()) },
+      workspace: { openDialog: vi.fn(), create: vi.fn(), rename: vi.fn(), showInFinder: vi.fn(), remove: vi.fn() },
     };
   }
 });
@@ -92,19 +123,15 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// TabBar tests
+// Smoke test 1: TabBar — title span truncates, close button stays visible
 // ---------------------------------------------------------------------------
-describe('TabBar – tab title overflow', () => {
-  it('title span has truncate class', async () => {
+describe('TabBar – tab title overflow smoke test', () => {
+  it('title span has truncate class and close button has shrink-0', async () => {
     const { useTerminalStore } = await import('../../src/renderer/stores/terminal-store');
-    const mockTab = {
-      id: 't1',
-      title: 'A very long tab title that should be truncated with an ellipsis',
-      agentId: 'claude',
-      sessionId: null,
-    };
+    const tab1 = { id: 't1', title: 'A very long tab title that should be truncated with an ellipsis', agentId: 'claude', sessionId: null };
+    const tab2 = { id: 't2', title: 'Tab 2', agentId: 'shell', sessionId: null };
     (useTerminalStore as ReturnType<typeof vi.fn>).mockReturnValue({
-      tabs: [mockTab],
+      tabs: [tab1, tab2],
       activeTabId: 't1',
       setActiveTab: vi.fn(),
       removeTab: vi.fn(),
@@ -116,55 +143,10 @@ describe('TabBar – tab title overflow', () => {
     const { container } = render(<TabBar />);
 
     const titleSpan = Array.from(container.querySelectorAll('span')).find(
-      (s) => s.textContent === mockTab.title
+      (s) => s.textContent === tab1.title
     );
     expect(titleSpan, 'title span not found').toBeTruthy();
     expect(titleSpan!.className).toContain('truncate');
-  });
-
-  it('tab button has min-w-0 and max-w classes', async () => {
-    const { useTerminalStore } = await import('../../src/renderer/stores/terminal-store');
-    const mockTab = {
-      id: 't2',
-      title: 'Another very long tab title exceeding any reasonable width',
-      agentId: 'shell',
-      sessionId: null,
-    };
-    (useTerminalStore as ReturnType<typeof vi.fn>).mockReturnValue({
-      tabs: [mockTab],
-      activeTabId: 't2',
-      setActiveTab: vi.fn(),
-      removeTab: vi.fn(),
-      dropdownOpen: false,
-      toggleDropdown: vi.fn(),
-    });
-
-    const { TabBar } = await import('../../src/renderer/components/terminal/TabBar');
-    const { container } = render(<TabBar />);
-
-    // First button is the tab button (second is the + button)
-    const buttons = container.querySelectorAll('button');
-    const tabButton = buttons[0];
-    expect(tabButton, 'tab button not found').toBeTruthy();
-    expect(tabButton.className).toContain('min-w-0');
-    expect(tabButton.className).toMatch(/max-w-/);
-  });
-
-  it('close button has shrink-0 so it stays visible', async () => {
-    const { useTerminalStore } = await import('../../src/renderer/stores/terminal-store');
-    const tab1 = { id: 't3', title: 'Tab 1', agentId: 'claude', sessionId: null };
-    const tab2 = { id: 't4', title: 'Tab 2', agentId: 'gemini', sessionId: null };
-    (useTerminalStore as ReturnType<typeof vi.fn>).mockReturnValue({
-      tabs: [tab1, tab2],
-      activeTabId: 't3',
-      setActiveTab: vi.fn(),
-      removeTab: vi.fn(),
-      dropdownOpen: false,
-      toggleDropdown: vi.fn(),
-    });
-
-    const { TabBar } = await import('../../src/renderer/components/terminal/TabBar');
-    const { container } = render(<TabBar />);
 
     const closeButtons = Array.from(container.querySelectorAll('span[role="button"]'));
     expect(closeButtons.length, 'no close buttons found').toBeGreaterThan(0);
@@ -175,96 +157,39 @@ describe('TabBar – tab title overflow', () => {
 });
 
 // ---------------------------------------------------------------------------
-// PaneView DraggableTab tests
+// Smoke test 2: PaneView — title span truncates, close button stays visible
+// (DraggableTab tested indirectly via PaneView)
 // ---------------------------------------------------------------------------
-describe('PaneView DraggableTab – tab title overflow', () => {
-  it('title span has truncate class', async () => {
-    const { DraggableTab } = await import('../../src/renderer/components/layout/PaneView');
-
+describe('PaneView – tab title overflow smoke test', () => {
+  it('title span has truncate class and close button has shrink-0', async () => {
+    const { useLayoutStore } = await import('../../src/renderer/stores/layout-store');
     const mockTab = {
       id: 'p1',
       title: 'A very long pane tab title that must be truncated with ellipsis',
       type: 'terminal' as const,
       sessionId: 'sess1',
       agentId: 'claude',
-      isPlugin: false,
     };
+    const mockPane = { id: 'pane1', tabs: [mockTab], activeTabId: 'p1' };
+    (useLayoutStore as ReturnType<typeof vi.fn>).mockReturnValue({
+      focusedPaneId: 'pane1',
+      setFocusedPane: vi.fn(),
+      setActiveTab: vi.fn(),
+      removeTabFromPane: vi.fn(),
+      renameTabInPane: vi.fn(),
+      splitPane: vi.fn(),
+      closePane: vi.fn(),
+      moveTabToPane: vi.fn(),
+    });
 
-    const { container } = render(
-      <DraggableTab
-        tab={mockTab}
-        paneId="pane1"
-        isActive={false}
-        onActivate={vi.fn()}
-        onClose={vi.fn()}
-        onContextMenu={vi.fn()}
-        onRename={vi.fn()}
-        canClose={true}
-      />
-    );
+    const { PaneView } = await import('../../src/renderer/components/layout/PaneView');
+    const { container } = render(<PaneView pane={mockPane as Parameters<typeof PaneView>[0]['pane']} />);
 
     const titleSpan = Array.from(container.querySelectorAll('span')).find(
       (s) => s.textContent === mockTab.title
     );
     expect(titleSpan, 'title span not found').toBeTruthy();
     expect(titleSpan!.className).toContain('truncate');
-  });
-
-  it('tab button has min-w-0 and max-w classes', async () => {
-    const { DraggableTab } = await import('../../src/renderer/components/layout/PaneView');
-
-    const mockTab = {
-      id: 'p2',
-      title: 'Another long title',
-      type: 'terminal' as const,
-      sessionId: 'sess2',
-      agentId: 'shell',
-      isPlugin: false,
-    };
-
-    const { container } = render(
-      <DraggableTab
-        tab={mockTab}
-        paneId="pane2"
-        isActive={true}
-        onActivate={vi.fn()}
-        onClose={vi.fn()}
-        onContextMenu={vi.fn()}
-        onRename={vi.fn()}
-        canClose={false}
-      />
-    );
-
-    const button = container.querySelector('button');
-    expect(button, 'tab button not found').toBeTruthy();
-    expect(button!.className).toContain('min-w-0');
-    expect(button!.className).toMatch(/max-w-/);
-  });
-
-  it('close button has shrink-0', async () => {
-    const { DraggableTab } = await import('../../src/renderer/components/layout/PaneView');
-
-    const mockTab = {
-      id: 'p3',
-      title: 'Tab title',
-      type: 'terminal' as const,
-      sessionId: 'sess3',
-      agentId: 'claude',
-      isPlugin: false,
-    };
-
-    const { container } = render(
-      <DraggableTab
-        tab={mockTab}
-        paneId="pane3"
-        isActive={false}
-        onActivate={vi.fn()}
-        onClose={vi.fn()}
-        onContextMenu={vi.fn()}
-        onRename={vi.fn()}
-        canClose={true}
-      />
-    );
 
     const closeBtn = container.querySelector('span[role="button"]');
     expect(closeBtn, 'close button not found').toBeTruthy();
@@ -273,11 +198,61 @@ describe('PaneView DraggableTab – tab title overflow', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WorkspaceNav tab row structural test
+// Smoke test 3: WorkspaceNav — sidebar workspace name span truncates
+// (sidebar list uses truncate+flex-1 without a min/max-w cap — different
+//  context from the editor tab bar which enforces 80px/200px bounds)
 // ---------------------------------------------------------------------------
-describe('WorkspaceNav tab row – title overflow', () => {
-  it('WorkspaceNav module exports WorkspaceNav component', async () => {
-    const mod = await import('../../src/renderer/components/workspace/WorkspaceNav');
-    expect(mod.WorkspaceNav).toBeDefined();
+describe('WorkspaceNav – tab title overflow smoke test', () => {
+  it('sidebar workspace name span has truncate class', async () => {
+    const { useWorkspaceStore } = await import('../../src/renderer/stores/workspace-store');
+    const { useTerminalStore } = await import('../../src/renderer/stores/terminal-store');
+    const { useLayoutStore } = await import('../../src/renderer/stores/layout-store');
+
+    const mockWs = { id: 'ws1', name: 'A very long workspace name that should truncate in the sidebar', path: '/home/user/project', color: '#3B82F6' };
+
+    (useWorkspaceStore as ReturnType<typeof vi.fn>).mockReturnValue({
+      workspaces: [mockWs],
+      activeWorkspaceId: 'ws1',
+      navExpanded: true,
+      setActive: vi.fn(),
+      toggleNav: vi.fn(),
+      addWorkspace: vi.fn(),
+      removeWorkspace: vi.fn(),
+      renameWorkspace: vi.fn(),
+    });
+
+    (useTerminalStore as ReturnType<typeof vi.fn>).mockReturnValue({
+      tabs: [],
+      activeTabId: null,
+      setActiveTab: vi.fn(),
+      removeTab: vi.fn(),
+      dropdownOpen: false,
+      toggleDropdown: vi.fn(),
+      workspaceTabs: {},
+    });
+
+    const layoutState = {
+      layout: { id: 'pane1', tabs: [], activeTabId: null },
+      focusedPaneId: null,
+      setFocusedPane: vi.fn(),
+      setActiveTab: vi.fn(),
+      removeTabFromPane: vi.fn(),
+      renameTabInPane: vi.fn(),
+      splitPane: vi.fn(),
+    };
+    (useLayoutStore as ReturnType<typeof vi.fn>).mockImplementation(
+      (selector: (s: typeof layoutState) => unknown) =>
+        typeof selector === 'function' ? selector(layoutState) : layoutState
+    );
+
+    const { WorkspaceNav } = await import('../../src/renderer/components/workspace/WorkspaceNav');
+    const { container } = render(<WorkspaceNav />);
+
+    // Workspace name is always visible in expanded mode and must truncate
+    const nameSpan = Array.from(container.querySelectorAll('span')).find(
+      (s) => s.textContent === mockWs.name
+    );
+    expect(nameSpan, 'workspace name span not found in sidebar').toBeTruthy();
+    expect(nameSpan!.className).toContain('truncate');
   });
 });

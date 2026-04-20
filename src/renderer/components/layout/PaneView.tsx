@@ -22,16 +22,17 @@ const AGENT_COLORS: Record<string, string> = {
 
 interface DraggableTabProps {
   tab: TerminalTab;
-  paneId?: string;
+  paneId: string;
   isActive: boolean;
   onActivate: () => void;
   onClose: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onRename?: (title: string) => void;
+  onRename: (title: string) => void;
   canClose: boolean;
 }
 
-export function DraggableTab({ tab, paneId = '', isActive, onActivate, onClose, onContextMenu, onRename = () => {}, canClose }: DraggableTabProps) {
+// 80px min / 200px max chosen to fit ~25 chars at 12px monospace; keep in sync with TabBar.tsx
+function DraggableTab({ tab, paneId, isActive, onActivate, onClose, onContextMenu, onRename, canClose }: DraggableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.id,
     data: { tab, paneId },
@@ -72,7 +73,7 @@ export function DraggableTab({ tab, paneId = '', isActive, onActivate, onClose, 
         onClick={isEditing ? undefined : onActivate}
         onDoubleClick={(e) => { if (isPlugin) return; e.stopPropagation(); setIsEditing(true); }}
         onContextMenu={onContextMenu}
-        className={`group relative flex items-center gap-1.5 px-3 h-full text-[12px] font-mono transition-colors min-w-[80px] max-w-[200px] min-w-0 ${
+        className={`group relative flex items-center gap-1.5 px-3 h-full text-[12px] font-mono transition-colors min-w-[80px] max-w-[200px] ${
           isActive
             ? 'bg-aide-tab-active-bg text-aide-text-primary'
             : 'bg-aide-tab-inactive-bg text-aide-text-secondary hover:text-aide-text-primary'
@@ -102,7 +103,7 @@ export function DraggableTab({ tab, paneId = '', isActive, onActivate, onClose, 
             className="bg-transparent outline-none border-b border-aide-accent text-[12px] font-mono min-w-0 w-24"
           />
         ) : (
-          <span className="truncate">{tab.title}</span>
+          <span className="truncate min-w-0 flex-1">{tab.title}</span>
         )}
         {canClose && !isEditing && (
           <span
