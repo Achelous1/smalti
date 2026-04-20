@@ -1,5 +1,6 @@
 import { useTerminalStore } from '../../stores/terminal-store';
 import { AgentDropdown } from './AgentDropdown';
+import { Tooltip } from '../ui/Tooltip';
 
 const AGENT_COLORS: Record<string, string> = {
   claude: 'var(--agent-claude)',
@@ -26,7 +27,8 @@ export function TabBar() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`group relative flex items-center gap-1.5 px-3 h-full text-[12px] font-mono transition-colors ${
+            // 80px min / 200px max: keep in sync with PaneView.tsx DraggableTab (fits ~25 chars at 12px monospace)
+            className={`group relative flex items-center gap-1.5 px-3 h-full text-[12px] font-mono transition-colors min-w-[80px] max-w-[200px] ${
               isActive
                 ? 'bg-aide-tab-active-bg text-aide-text-primary'
                 : 'bg-aide-tab-inactive-bg text-aide-text-secondary hover:text-aide-text-primary'
@@ -44,7 +46,9 @@ export function TabBar() {
               className="w-1.5 h-1.5 rounded-full shrink-0"
               style={{ backgroundColor: dotColor }}
             />
-            <span>{tab.title}</span>
+            <Tooltip content={tab.title} placement="bottom" className="min-w-0 flex-1">
+              <span className="truncate block w-full text-left">{tab.title}</span>
+            </Tooltip>
             {/* Close button on hover */}
             {tabs.length > 1 && (
               <span
@@ -74,7 +78,7 @@ export function TabBar() {
                     removeTab(tab.id);
                   }
                 }}
-                className="ml-1 opacity-0 group-hover:opacity-100 text-[10px] text-aide-text-tertiary hover:text-aide-text-primary transition-opacity leading-none"
+                className="ml-1 shrink-0 opacity-0 group-hover:opacity-100 text-[10px] text-aide-text-tertiary hover:text-aide-text-primary transition-opacity leading-none"
               >
                 ×
               </span>
