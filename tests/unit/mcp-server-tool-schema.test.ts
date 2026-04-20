@@ -11,16 +11,23 @@ function callToolsList(cwd: string): { tools: Array<Record<string, unknown>> } {
   const result = spawnSync(process.execPath, [SERVER_PATH], {
     cwd,
     input: req,
-    encoding: 'utf-8',
     timeout: 10_000,
   });
   if (result.error) throw result.error;
-  const lines = result.stdout.split('\n').filter(Boolean);
+  // Decode stdout from a Buffer in one pass — Node 20's spawnSync + encoding:'utf-8'
+  // has truncated multi-byte UTF-8 output across chunk boundaries on some platforms.
+  const stdout = Buffer.isBuffer(result.stdout)
+    ? result.stdout.toString('utf-8')
+    : String(result.stdout ?? '');
+  const stderr = Buffer.isBuffer(result.stderr)
+    ? result.stderr.toString('utf-8')
+    : String(result.stderr ?? '');
+  const lines = stdout.split('\n').filter(Boolean);
   for (const line of lines) {
     const msg = JSON.parse(line);
     if (msg.id === 1 && msg.result) return msg.result;
   }
-  throw new Error(`No response: stdout=${result.stdout} stderr=${result.stderr}`);
+  throw new Error(`No response: stdout=${stdout} stderr=${stderr}`);
 }
 
 describe('MCP server getBuiltinTools — plugin tool schema', () => {
