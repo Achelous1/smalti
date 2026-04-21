@@ -11,6 +11,7 @@ import { usePluginStore } from '../../src/renderer/stores/plugin-store';
 import { useLayoutStore, createPane } from '../../src/renderer/stores/layout-store';
 import { useTerminalStore } from '../../src/renderer/stores/terminal-store';
 import { useWorkspaceStore } from '../../src/renderer/stores/workspace-store';
+import { deactivatingPluginIds } from '../../src/renderer/stores/plugin-deactivate-guard';
 import type { TerminalTab, PluginInfo } from '../../src/types/ipc';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ describe('plugin deactivate – tab removal', () => {
     useTerminalStore.setState({ tabs: [], activeTabId: null, dropdownOpen: false, workspaceTabs: {} });
     usePluginStore.setState({ plugins: [], loading: false, error: null, generating: false, generateError: null });
     useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: 'ws-1', recentProjects: [], navExpanded: true });
+    deactivatingPluginIds.clear();
   });
 
   afterEach(() => {
@@ -192,5 +194,126 @@ describe('plugin deactivate – tab removal', () => {
       (t) => (t as Record<string, unknown>).pluginId === 'plugin-off',
     );
     expect(inactiveSavedTabs).toHaveLength(0);
+  });
+
+  // ── case (e) Fix A: closing a plugin tab directly auto-deactivates ────────
+
+  it('(e) removeTabFromPane on a plugin tab triggers window.aide.plugin.deactivate', async () => {
+    const plugin = makePlugin('plugin-close', true);
+    const tab = makePluginTab('plugin-close');
+
+    usePluginStore.setState({ plugins: [plugin], loading: false, error: null, generating: false, generateError: null });
+    const paneId = useLayoutStore.getState().getAllPanes()[0].id;
+    useLayoutStore.getState().addTabToPane(paneId, tab);
+    useTerminalStore.getState().addTab(tab);
+
+    (window.aide.plugin.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makePlugin('plugin-close', false),
+    ]);
+
+    // Simulate a × click on the plugin tab: layout-store removes the tab.
+    // The auto-deactivate side effect is fire-and-forget, so await a tick.
+    useLayoutStore.getState().removeTabFromPane(paneId, tab.id);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(window.aide.plugin.deactivate).toHaveBeenCalledWith('plugin-close');
+  });
+
+  // ── case (f) Fix A idempotent: deactivate() does not recurse ──────────────
+
+  it('(f) plugin-store.deactivate does not cause recursive deactivate via removeTabFromPane', async () => {
+    const plugin = makePlugin('plugin-recur', true);
+    const tab = makePluginTab('plugin-recur');
+
+    usePluginStore.setState({ plugins: [plugin], loading: false, error: null, generating: false, generateError: null });
+    const paneId = useLayoutStore.getState().getAllPanes()[0].id;
+    useLayoutStore.getState().addTabToPane(paneId, tab);
+    useTerminalStore.getState().addTab(tab);
+
+    (window.aide.plugin.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      makePlugin('plugin-recur', false),
+    ]);
+
+    await usePluginStore.getState().deactivate('plugin-recur');
+    // Give any fire-and-forget side effects a chance to run
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    // window.aide.plugin.deactivate is called exactly once by plugin-store
+    // itself — the layout-store hook must NOT call it a second time.
+    expect(window.aide.plugin.deactivate).toHaveBeenCalledTimes(1);
+  });
+
+  // ── case (g) Fix B: restoreSession skips plugin tabs not in activePlugins ─
+
+  it('(g) restoreSession skips plugin tabs missing from session.activePlugins', async () => {
+    // Tampered saved session: layout has a plugin tab for plugin-gone, but
+    // activePlugins does not list it. A shell tab is present too.
+    const tamperedSession = {
+      version: 1,
+      workspaceId: 'ws-1',
+      savedAt: Date.now(),
+      layout: {
+        id: 'pane-1',
+        tabs: [
+          { id: 'ghost-plugin', type: 'plugin', title: 'Gone', pluginId: 'plugin-gone', isActive: false },
+          { id: 'shell-1', type: 'shell', title: '$ shell', isActive: true },
+        ],
+        activeTabId: 'shell-1',
+      },
+      focusedPaneId: 'pane-1',
+      activePlugins: [],
+      sidePanelTab: 'files' as const,
+    };
+
+    (window.aide.session.load as ReturnType<typeof vi.fn>).mockResolvedValue(tamperedSession);
+    (window.aide.terminal.spawn as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, sessionId: 'new-sess' });
+
+    useWorkspaceStore.setState({
+      workspaces: [{ id: 'ws-1', name: 'ws', path: '/tmp/ws' }],
+      activeWorkspaceId: 'ws-1',
+      recentProjects: [],
+      navExpanded: true,
+      sidePanelTab: 'files',
+    } as Parameters<typeof useWorkspaceStore.setState>[0]);
+
+    await useLayoutStore.getState().restoreSession('ws-1');
+
+    const restoredPluginTabs = useLayoutStore
+      .getState()
+      .getAllPanes()
+      .flatMap((p) => p.tabs.filter((t) => t.type === 'plugin'));
+    expect(restoredPluginTabs).toHaveLength(0);
+
+    const restoredShellTabs = useLayoutStore
+      .getState()
+      .getAllPanes()
+      .flatMap((p) => p.tabs.filter((t) => t.type === 'shell'));
+    expect(restoredShellTabs).toHaveLength(1);
+  });
+
+  // ── case (h) Fix A guard isolation: guard presence suppresses the hook ────
+
+  it('(h) removeTabFromPane skips auto-deactivate when pluginId is in the guard set', async () => {
+    const plugin = makePlugin('plugin-guarded', true);
+    const tab = makePluginTab('plugin-guarded');
+
+    usePluginStore.setState({ plugins: [plugin], loading: false, error: null, generating: false, generateError: null });
+    const paneId = useLayoutStore.getState().getAllPanes()[0].id;
+    useLayoutStore.getState().addTabToPane(paneId, tab);
+    useTerminalStore.getState().addTab(tab);
+
+    // Pre-populate the guard — simulates plugin-store.deactivate() being the
+    // caller, so the layout-store hook must NOT call deactivate again.
+    deactivatingPluginIds.add('plugin-guarded');
+    try {
+      useLayoutStore.getState().removeTabFromPane(paneId, tab.id);
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(window.aide.plugin.deactivate).not.toHaveBeenCalled();
+    } finally {
+      deactivatingPluginIds.delete('plugin-guarded');
+    }
   });
 });
