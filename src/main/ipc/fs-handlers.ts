@@ -40,6 +40,12 @@ interface WatcherHandle {
   stop(): void;
 }
 
+export interface PtyHandle {
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(): void;
+}
+
 interface NativeMod {
   readTree: (dir: string) => FileTreeNode[];
   readTreeWithError: (dir: string) => { nodes: FileTreeNode[]; error?: FsReadTreeError };
@@ -52,6 +58,16 @@ interface NativeMod {
     exclusions: string[],
     callback: (ev: WatcherEventPayload) => void,
   ) => WatcherHandle;
+  spawnPty: (
+    command: string,
+    args: string[],
+    cwd: string,
+    env: [string, string][],
+    cols: number,
+    rows: number,
+    onData: (ev: { data: string }) => void,
+    onExit: (ev: { exitCode: number }) => void,
+  ) => PtyHandle;
 }
 
 let _nativeMod: NativeMod | null = null;
