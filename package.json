@@ -77,7 +77,6 @@
     "@octokit/rest": "^22.0.1",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "chokidar": "^3.6.0",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^8.2.0",
     "node-pty": "^1.0.0",

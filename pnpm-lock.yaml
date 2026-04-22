@@ -29,9 +29,6 @@ importers:
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
-      chokidar:
-        specifier: ^3.6.0
-        version: 3.6.0
       electron-squirrel-startup:
         specifier: ^1.0.1
         version: 1.0.1
