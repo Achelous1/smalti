@@ -35,9 +35,6 @@ importers:
       electron-store:
         specifier: ^8.2.0
         version: 8.2.0
-      node-pty:
-        specifier: ^1.0.0
-        version: 1.1.0
       react:
         specifier: ^19.0.0
         version: 19.2.4
@@ -3562,9 +3559,6 @@ packages:
     peerDependenciesMeta:
       encoding:
         optional: true
-
-  node-pty@1.1.0:
-    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
 
   node-releases@2.0.36:
     resolution: {integrity: sha512-TdC8FSgHz8Mwtw9g5L4gR/Sh9XhSP/0DEkQxfEFXOpiul5IiHgHan2VhYYb6agDSfp4KuvltmGApc8HMgUrIkA==}
@@ -8609,7 +8603,8 @@ snapshots:
     dependencies:
       semver: 7.7.4
 
-  node-addon-api@7.1.1: {}
+  node-addon-api@7.1.1:
+    optional: true
 
   node-api-version@0.2.1:
     dependencies:
@@ -8627,10 +8622,6 @@ snapshots:
       whatwg-url: 5.0.0
     optionalDependencies:
       encoding: 0.1.13
-
-  node-pty@1.1.0:
-    dependencies:
-      node-addon-api: 7.1.1
 
   node-releases@2.0.36: {}
 
