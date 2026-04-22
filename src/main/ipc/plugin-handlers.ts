@@ -127,12 +127,10 @@ function refreshPlugins(cwd: string): void {
   // plugins (e.g. created by MCP aide_create_plugin at runtime) and drop
   // plugins whose spec no longer exists.
   localPluginsWatcher?.stop();
-  // Convert RegExp exclusions to strings for the Rust watcher.
-  const stringExclusions = WATCHER_EXCLUSIONS.filter((e): e is string => typeof e === 'string');
   localPluginsWatcher = getNativeMod().startWatcher(
     localDir,
     2,
-    stringExclusions,
+    WATCHER_EXCLUSIONS,
     () => {
       rescanPluginsDir(localDir);
       broadcastPluginsChanged();
@@ -144,7 +142,7 @@ function refreshPlugins(cwd: string): void {
   localHtmlWatcher = getNativeMod().startWatcher(
     localDir,
     undefined,
-    stringExclusions,
+    WATCHER_EXCLUSIONS,
     (ev) => {
       if (!ev.path.endsWith('index.html')) return;
       if (ev.kind !== 'modify' && ev.kind !== 'add') return;
@@ -164,7 +162,7 @@ function refreshPlugins(cwd: string): void {
   dataWatcher = getNativeMod().startWatcher(
     aideDir,
     0,
-    stringExclusions,
+    WATCHER_EXCLUSIONS,
     (ev) => {
       if (ev.path.endsWith('.json') && !ev.path.endsWith('settings.json')) {
         broadcastDataChanged();

@@ -111,15 +111,10 @@ export function setWorkspaceWatcher(workspacePath: string | null): void {
   // simply return an empty tree until the walk completes.
   void fileIndex.initialize(workspacePath);
 
-  // Convert RegExp exclusions to string patterns the Rust watcher understands.
-  // WATCHER_EXCLUSIONS contains both strings and RegExps; only strings are
-  // passed to Rust (the Rust exclusion matcher handles the patterns we use).
-  const stringExclusions = WATCHER_EXCLUSIONS.filter((e): e is string => typeof e === 'string');
-
   activeWatcherHandle = getNativeMod().startWatcher(
     workspacePath,
     3,
-    stringExclusions,
+    WATCHER_EXCLUSIONS,
     (ev) => {
       if (ev.kind === 'add') {
         if (ev.entryKind === 'directory') fileIndex.addPath(ev.path, 'directory');
