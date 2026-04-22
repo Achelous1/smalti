@@ -2,7 +2,6 @@ import { type IpcMain, BrowserWindow, shell } from 'electron';
 import fs from 'fs';
 import { release as osRelease } from 'os';
 import path from 'path';
-import chokidar, { type FSWatcher } from 'chokidar';
 import { IPC_CHANNELS } from './channels';
 import { WATCHER_EXCLUSIONS } from './watcher-exclusions';
 import { FileIndex } from './file-index';
@@ -30,16 +29,33 @@ function candidateNativeFilenames(): string[] {
   return [`${base}.node`];
 }
 
+interface WatcherEventPayload {
+  kind: 'add' | 'remove' | 'modify' | 'rename';
+  path: string;
+  entryKind?: 'file' | 'directory';
+  from?: string;
+}
+
+interface WatcherHandle {
+  stop(): void;
+}
+
 interface NativeMod {
   readTree: (dir: string) => FileTreeNode[];
   readTreeWithError: (dir: string) => { nodes: FileTreeNode[]; error?: FsReadTreeError };
   readFile: (path: string) => string;
   writeFile: (path: string, content: string) => void;
   deletePath: (path: string) => void;
+  startWatcher: (
+    path: string,
+    depth: number | undefined,
+    exclusions: string[],
+    callback: (ev: WatcherEventPayload) => void,
+  ) => WatcherHandle;
 }
 
 let _nativeMod: NativeMod | null = null;
-function getNativeMod(): NativeMod {
+export function getNativeMod(): NativeMod {
   if (_nativeMod !== null) return _nativeMod;
   const nativeDir = path.resolve(__dirname, 'native');
   if (!fs.existsSync(nativeDir)) {
@@ -74,13 +90,13 @@ function broadcastChanged(): void {
   }
 }
 
-let activeWatcher: FSWatcher | null = null;
+let activeWatcherHandle: WatcherHandle | null = null;
 let watcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function setWorkspaceWatcher(workspacePath: string | null): void {
-  if (activeWatcher) {
-    void activeWatcher.close();
-    activeWatcher = null;
+  if (activeWatcherHandle) {
+    activeWatcherHandle.stop();
+    activeWatcherHandle = null;
   }
   if (watcherDebounceTimer) {
     clearTimeout(watcherDebounceTimer);
@@ -95,23 +111,30 @@ export function setWorkspaceWatcher(workspacePath: string | null): void {
   // simply return an empty tree until the walk completes.
   void fileIndex.initialize(workspacePath);
 
-  activeWatcher = chokidar
-    .watch(workspacePath, {
-      ignoreInitial: true,
-      depth: 3,
-      ignored: WATCHER_EXCLUSIONS,
-    })
-    .on('add', (p) => fileIndex.addPath(p, 'file'))
-    .on('addDir', (p) => fileIndex.addPath(p, 'directory'))
-    .on('unlink', (p) => fileIndex.removePath(p))
-    .on('unlinkDir', (p) => fileIndex.removeDir(p))
-    .on('all', () => {
+  // Convert RegExp exclusions to string patterns the Rust watcher understands.
+  // WATCHER_EXCLUSIONS contains both strings and RegExps; only strings are
+  // passed to Rust (the Rust exclusion matcher handles the patterns we use).
+  const stringExclusions = WATCHER_EXCLUSIONS.filter((e): e is string => typeof e === 'string');
+
+  activeWatcherHandle = getNativeMod().startWatcher(
+    workspacePath,
+    3,
+    stringExclusions,
+    (ev) => {
+      if (ev.kind === 'add') {
+        if (ev.entryKind === 'directory') fileIndex.addPath(ev.path, 'directory');
+        else fileIndex.addPath(ev.path, 'file');
+      } else if (ev.kind === 'remove') {
+        if (ev.entryKind === 'directory') fileIndex.removeDir(ev.path);
+        else fileIndex.removePath(ev.path);
+      }
       if (watcherDebounceTimer) clearTimeout(watcherDebounceTimer);
       watcherDebounceTimer = setTimeout(() => {
         broadcastChanged();
         watcherDebounceTimer = null;
       }, 500);
-    });
+    },
+  );
 }
 
 export function registerFsHandlers(ipcMain: IpcMain): void {

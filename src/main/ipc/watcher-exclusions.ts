@@ -1,5 +1,5 @@
 /**
- * chokidar watcher exclusion patterns — shared across fs-handlers and plugin-handlers.
+ * Watcher exclusion patterns — shared across fs-handlers and plugin-handlers.
  * Mirrors VS Code's default files.watcherExclude to avoid CPU hotspots from
  * watching large build/dependency directories.
  */
