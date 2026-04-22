@@ -29,9 +29,6 @@ const aideAPI: AideAPI = {
 
     searchFiles: (query: string, limit?: number): Promise<FileTreeNode[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.FS_SEARCH_FILES, query, limit),
-
-    readTreeNative: (dirPath: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.FS_READ_TREE_NATIVE, dirPath),
   },
 
   git: {
