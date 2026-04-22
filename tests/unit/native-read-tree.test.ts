@@ -264,8 +264,12 @@ describe.skipIf(!hasReadFile)('napi fs-op error message format (PR-B #B2/#B4)', 
     deletePath: (path: string) => void;
   };
 
+  // nativeModPath may be null on platforms without a built .node (e.g. Windows
+  // CI where build:native is intentionally skipped). skipIf above prevents the
+  // it() blocks from running, but describe callbacks still execute at collect
+  // time — so guard the require to avoid `require(null)` throwing here.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fsMod = require(nativeModPath!) as FsMod;
+  const fsMod = (nativeModPath !== null ? require(nativeModPath) : null) as FsMod;
 
   it('readFile on nonexistent path rejects with ENOENT: prefix in message', () => {
     const nonexistent = '/nonexistent-aide-test-b2/nope.txt';
