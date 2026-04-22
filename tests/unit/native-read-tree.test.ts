@@ -113,4 +113,49 @@ describe.skipIf(nativeModPath === null)('native read_tree (napi-rs)', () => {
       fs.rmSync(symlinkDir, { recursive: true, force: true });
     }
   });
+
+  it('trailing-slash parity: output is identical with or without trailing slash', () => {
+    // Lock in the contract that Rust and JS both normalise trailing slashes.
+    const withSlash = testDir.endsWith('/') ? testDir : testDir + '/';
+    const rustWithout = nativeMod.readTree(testDir).sort((a, b) => a.name.localeCompare(b.name));
+    const rustWith = nativeMod.readTree(withSlash).sort((a, b) => a.name.localeCompare(b.name));
+    const jsWithout = jsReadTree(testDir).sort((a, b) => a.name.localeCompare(b.name));
+    const jsWith = jsReadTree(withSlash).sort((a, b) => a.name.localeCompare(b.name));
+
+    expect(rustWith).toHaveLength(rustWithout.length);
+    expect(jsWith).toHaveLength(jsWithout.length);
+    for (let i = 0; i < rustWithout.length; i++) {
+      expect(rustWith[i].name).toBe(rustWithout[i].name);
+      expect(rustWith[i].path).toBe(rustWithout[i].path, 'Rust path must not have double-slash');
+      expect(jsWith[i].path).toBe(jsWithout[i].path, 'JS path must not have double-slash');
+    }
+  });
+
+  // Non-UTF8 filename handling: Rust skips entries with non-UTF8 names while
+  // Node.js (on Linux) can represent them. On macOS/APFS the OS rejects creation
+  // of non-UTF8 filenames entirely, so this test is gated to Linux.
+  // Contract: Rust skips the entry; JS may include it. Both must handle the dir
+  // without throwing.
+  it.skipIf(process.platform !== 'linux')(
+    'non-UTF8 filenames: Rust skips, neither implementation throws',
+    () => {
+      const nonUtf8Dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-utf8-test-'));
+      try {
+        fs.writeFileSync(path.join(nonUtf8Dir, 'valid.txt'), 'ok');
+        // Write a file with invalid UTF-8 bytes in its name via Buffer.
+        const invalidName = Buffer.from([0x66, 0xff, 0x6f]); // "f<invalid>o"
+        fs.writeFileSync(path.join(nonUtf8Dir, invalidName.toString('binary')), 'bad');
+
+        const rustResult = nativeMod.readTree(nonUtf8Dir);
+        // Rust must skip the non-UTF8 entry and return only valid.txt.
+        expect(rustResult).toHaveLength(1);
+        expect(rustResult[0].name).toBe('valid.txt');
+
+        // JS must not throw — just returns whatever it can.
+        expect(() => jsReadTree(nonUtf8Dir)).not.toThrow();
+      } finally {
+        fs.rmSync(nonUtf8Dir, { recursive: true, force: true });
+      }
+    },
+  );
 });
