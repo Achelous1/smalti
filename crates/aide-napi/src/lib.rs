@@ -27,3 +27,48 @@ pub fn read_tree(dir_path: String) -> Vec<ExportedFileNode> {
         })
         .collect()
 }
+
+fn file_node_to_exported(n: aide_core::FileNode) -> ExportedFileNode {
+    ExportedFileNode {
+        name: n.name,
+        path: n.path,
+        node_type: match n.node_type {
+            aide_core::NodeType::File => "file".to_string(),
+            aide_core::NodeType::Directory => "directory".to_string(),
+        },
+    }
+}
+
+/// Mirrors FsReadTreeError in TypeScript ipc.ts.
+#[napi(object)]
+pub struct ExportedReadTreeError {
+    /// "EPERM" | "ENOENT" | "ENOTDIR" | "UNKNOWN"
+    pub code: String,
+    pub path: String,
+    pub message: String,
+}
+
+/// Return value of read_tree_with_error — mirrors { nodes, error? } in TS.
+#[napi(object)]
+pub struct ExportedReadTreeResult {
+    pub nodes: Vec<ExportedFileNode>,
+    pub error: Option<ExportedReadTreeError>,
+}
+
+#[napi]
+pub fn read_tree_with_error(dir_path: String) -> ExportedReadTreeResult {
+    let result = aide_core::read_tree_with_error(&dir_path);
+    ExportedReadTreeResult {
+        nodes: result.nodes.into_iter().map(file_node_to_exported).collect(),
+        error: result.error.map(|e| ExportedReadTreeError {
+            code: match e.code {
+                aide_core::ReadTreeErrorCode::EPERM => "EPERM".to_string(),
+                aide_core::ReadTreeErrorCode::ENOENT => "ENOENT".to_string(),
+                aide_core::ReadTreeErrorCode::ENOTDIR => "ENOTDIR".to_string(),
+                aide_core::ReadTreeErrorCode::UNKNOWN => "UNKNOWN".to_string(),
+            },
+            path: e.path,
+            message: e.message,
+        }),
+    }
+}
