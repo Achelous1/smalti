@@ -115,11 +115,6 @@ mod tests {
     /// Non-UTF8 filename handling: entries whose names cannot be decoded as
     /// valid UTF-8 are silently skipped. This is documented contract — Phase 1
     /// defers a Buffer API to avoid rippling the napi type contract.
-    /// If this test fails it means to_string_lossy behavior changed; any
-    /// change must be intentional.
-    /// Non-UTF8 filename handling: entries whose names cannot be decoded as
-    /// valid UTF-8 are silently skipped. This is documented contract — Phase 1
-    /// defers a Buffer API to avoid rippling the napi type contract.
     ///
     /// gated to Linux because macOS/APFS rejects non-UTF-8 byte sequences at
     /// the filesystem level (EILSEQ), making it impossible to create such files
