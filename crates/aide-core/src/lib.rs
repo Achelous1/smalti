@@ -340,12 +340,12 @@ mod tests {
 }
 
 // Minimal safe FFI shim — only used in the EPERM test to detect root.
-#[cfg(unix)]
+#[cfg(all(unix, test))]
 extern "C" {
     fn getuid() -> u32;
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, test))]
 unsafe fn libc_getuid() -> u32 {
     getuid()
 }
