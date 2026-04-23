@@ -43,13 +43,12 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install dependencies
+        # postinstall hook runs `pnpm build:native` → Rust .node is built here.
+        # See scripts/build-native.mjs for the toolchain invocation.
         run: pnpm install
 
       - name: Lint
         run: pnpm lint
-
-      - name: Build native module
-        run: pnpm build:native
 
       - name: Test (Node)
         run: pnpm test
