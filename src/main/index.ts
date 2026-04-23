@@ -60,7 +60,7 @@ const createWindow = (): void => {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // node-pty requires this
+      sandbox: false, // Rust native module requires this
       preload: path.join(__dirname, 'preload.js'),
     },
   });

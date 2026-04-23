@@ -105,6 +105,97 @@ pub fn read_tree_with_error(dir_path: String) -> ExportedReadTreeResult {
     }
 }
 
+// ── PTY bindings ──────────────────────────────────────────────────────────────
+
+/// Payload delivered to the JS `onData` callback.
+#[napi(object)]
+pub struct PtyDataPayload {
+    pub data: String,
+}
+
+/// Payload delivered to the JS `onExit` callback.
+#[napi(object)]
+pub struct PtyExitPayload {
+    pub exit_code: i32,
+}
+
+/// Opaque JS handle for a running PTY process.
+/// Call `.write()`, `.resize()`, or `.kill()` to interact with it.
+#[napi]
+pub struct PtyJsHandle {
+    inner: aide_core::pty::PtyHandle,
+}
+
+#[napi]
+impl PtyJsHandle {
+    /// Write a string to the PTY stdin.
+    #[napi]
+    pub fn write(&self, data: String) -> napi::Result<()> {
+        self.inner
+            .write(data.as_bytes())
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    /// Resize the PTY.
+    #[napi]
+    pub fn resize(&self, cols: u16, rows: u16) -> napi::Result<()> {
+        self.inner
+            .resize(cols, rows)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    /// Kill the PTY child process.
+    #[napi]
+    pub fn kill(&self) -> napi::Result<()> {
+        self.inner
+            .kill()
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+}
+
+/// Spawn a PTY process.
+///
+/// - `env`: list of `[key, value]` tuples forwarded to the child process.
+/// - `on_data`: called on the JS thread with each output chunk.
+/// - `on_exit`: called on the JS thread once when the process exits.
+///
+/// Returns a `PtyJsHandle` for write / resize / kill.
+#[napi]
+pub fn spawn_pty(
+    command: String,
+    args: Vec<String>,
+    cwd: String,
+    env: Vec<(String, String)>,
+    cols: u16,
+    rows: u16,
+    on_data: ThreadsafeFunction<PtyDataPayload, ErrorStrategy::Fatal>,
+    on_exit: ThreadsafeFunction<PtyExitPayload, ErrorStrategy::Fatal>,
+) -> napi::Result<PtyJsHandle> {
+    let handle = aide_core::pty::spawn_pty(
+        &command,
+        &args,
+        &cwd,
+        env,
+        cols,
+        rows,
+        move |data| {
+            on_data.call(
+                PtyDataPayload { data },
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        },
+        move |exit_code| {
+            on_exit.call(
+                PtyExitPayload { exit_code },
+                ThreadsafeFunctionCallMode::NonBlocking,
+            );
+        },
+    )
+    .map_err(|e| napi::Error::from_reason(format!("spawn_pty: {e}")))?;
+
+    Ok(PtyJsHandle { inner: handle })
+}
+
 // ── Watcher bindings ──────────────────────────────────────────────────────────
 
 /// Event payload sent from the Rust watcher thread to JS via ThreadsafeFunction.

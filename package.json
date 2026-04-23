@@ -31,7 +31,6 @@
     "onlyBuiltDependencies": [
       "electron",
       "esbuild",
-      "node-pty",
       "electron-winstaller",
       "fs-xattr",
       "macos-alias"
@@ -79,7 +78,6 @@
     "@xterm/xterm": "^5.5.0",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^8.2.0",
-    "node-pty": "^1.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.0"

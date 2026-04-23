@@ -8,17 +8,9 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
-const nativeModules = ['node-pty'];
 const nativeNodeFiles = ['src/main/native'];
 
 function copyNativeModules(buildPath: string) {
-  for (const mod of nativeModules) {
-    const src = path.resolve(__dirname, 'node_modules', mod);
-    const dest = path.join(buildPath, 'node_modules', mod);
-    if (fs.existsSync(src)) {
-      fs.cpSync(src, dest, { recursive: true });
-    }
-  }
   // Copy Rust napi .node files so they are available under native/ at runtime
   for (const nativeDir of nativeNodeFiles) {
     const src = path.resolve(__dirname, nativeDir);
@@ -49,7 +41,7 @@ function patchInfoPlist(buildPath: string) {
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '{**/node_modules/node-pty/**/*,**/native/*.node}',
+      unpack: '**/native/*.node',
     },
     name: 'AIDE',
     icon: path.resolve(__dirname, 'resources', 'icon'),
