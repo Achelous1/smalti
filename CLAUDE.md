@@ -9,7 +9,7 @@ AIDE (AI-Driven IDE) - Electron-based terminal-centric IDE that integrates CLI c
 ## Development Commands
 
 ```bash
-pnpm install          # Install dependencies
+pnpm install          # Install dependencies + auto-build Rust native module (postinstall)
 pnpm start            # Dev server with HMR
 pnpm run package      # Package app
 pnpm run make         # Build distributable (dmg/exe)
@@ -17,6 +17,8 @@ pnpm lint             # ESLint
 pnpm test             # Vitest (unit)
 pnpm test:e2e         # Playwright (e2e)
 ```
+
+**Rust toolchain required**: `pnpm install` runs `postinstall` → `scripts/build-native.mjs` which compiles `crates/aide-napi` into `src/main/native/index.<platform>-<arch>.node`. Requires `rustup` with stable ≥1.82. If only Homebrew rustc (1.74) is installed, build fails — install rustup: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`. The build script prepends `~/.cargo/bin` to PATH so rustup shim takes precedence over any Homebrew rustc.
 
 ## Architecture
 
