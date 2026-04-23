@@ -49,11 +49,14 @@ pub struct ExportedReadTreeError {
     pub message: String,
 }
 
-/// Return value of read_tree_with_error — mirrors { nodes, error? } in TS.
+/// Return value of read_tree_with_error — mirrors { nodes, error?, skippedCount } in TS.
 #[napi(object)]
 pub struct ExportedReadTreeResult {
     pub nodes: Vec<ExportedFileNode>,
     pub error: Option<ExportedReadTreeError>,
+    /// Number of entries skipped because their names were not valid UTF-8.
+    /// Zero on most systems; non-zero only on Linux ext4/tmpfs with non-UTF8 filenames.
+    pub skipped_count: u32,
 }
 
 /// Converts an `io::Error` to a `napi::Error` with a Node.js-compatible error code
@@ -102,6 +105,7 @@ pub fn read_tree_with_error(dir_path: String) -> ExportedReadTreeResult {
             path: e.path,
             message: e.message,
         }),
+        skipped_count: result.skipped_count,
     }
 }
 

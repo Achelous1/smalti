@@ -75,7 +75,7 @@ const hasReadTreeWithError: boolean = nativeModPath !== null &&
 describe.skipIf(nativeModPath === null)('native read_tree (napi-rs)', () => {
   let nativeMod: {
     readTree: (dir: string) => Array<{ name: string; path: string; type: string }>;
-    readTreeWithError: (dir: string) => { nodes: Array<{ name: string; path: string; type: string }>; error: { code: string; path: string; message: string } | null | undefined };
+    readTreeWithError: (dir: string) => { nodes: Array<{ name: string; path: string; type: string }>; error: { code: string; path: string; message: string } | null | undefined; skippedCount: number };
   };
   let testDir: string;
 
@@ -192,6 +192,9 @@ describe.skipIf(nativeModPath === null)('native read_tree (napi-rs)', () => {
         // If this assertion fails after a napi-rs upgrade, the serialization
         // contract changed and callers must be audited.
         expect(result.error).toBeUndefined();
+        // skippedCount must be present and zero for a normal UTF-8 directory.
+        expect(result).toHaveProperty('skippedCount');
+        expect(result.skippedCount).toBe(0);
       });
 
       it('error field has {code, path, message} shape when path does not exist', () => {
