@@ -49,7 +49,7 @@ export interface PtyHandle {
 
 interface NativeMod {
   readTree: (dir: string) => FileTreeNode[];
-  readTreeWithError: (dir: string) => { nodes: FileTreeNode[]; error?: FsReadTreeError };
+  readTreeWithError: (dir: string) => { nodes: FileTreeNode[]; error?: FsReadTreeError; skippedCount: number };
   readFile: (path: string) => string;
   writeFile: (path: string, content: string) => void;
   deletePath: (path: string) => void;

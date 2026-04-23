@@ -79,6 +79,9 @@ pub struct ReadTreeError {
 pub struct ReadTreeResult {
     pub nodes: Vec<FileNode>,
     pub error: Option<ReadTreeError>,
+    /// Number of directory entries skipped because their names were not valid UTF-8.
+    /// Renderer can surface this count; previously only an eprintln was emitted.
+    pub skipped_count: u32,
 }
 
 /// Read the immediate children of `dir_path`, returning structured error info on failure.
@@ -93,14 +96,15 @@ pub fn read_tree_with_error(dir_path: &str) -> ReadTreeResult {
     match fs::read_dir(dir_path) {
         Ok(entries) => {
             let mut nodes = Vec::new();
+            let mut skipped_count: u32 = 0;
             for entry in entries.flatten() {
                 let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-                    eprintln!("[aide-core] skipping non-UTF-8 filename in {dir_path}");
+                    skipped_count += 1;
                     continue;
                 };
                 let full_path = Path::new(dir_path).join(&name);
                 let Some(path_str) = full_path.to_str().map(str::to_owned) else {
-                    eprintln!("[aide-core] skipping non-UTF-8 path in {dir_path}");
+                    skipped_count += 1;
                     continue;
                 };
                 let node_type = match entry.file_type() {
@@ -110,7 +114,7 @@ pub fn read_tree_with_error(dir_path: &str) -> ReadTreeResult {
                 };
                 nodes.push(FileNode { name, path: path_str, node_type });
             }
-            ReadTreeResult { nodes, error: None }
+            ReadTreeResult { nodes, error: None, skipped_count }
         }
         Err(e) => {
             use std::io::ErrorKind;
@@ -134,6 +138,7 @@ pub fn read_tree_with_error(dir_path: &str) -> ReadTreeResult {
                     path: dir_path.to_owned(),
                     message: e.to_string(),
                 }),
+                skipped_count: 0,
             }
         }
     }

@@ -215,7 +215,7 @@ export interface UpdateInfo {
 export interface AideAPI {
   fs: {
     readTree(dirPath: string): Promise<FileTreeNode[]>;
-    readTreeWithError(dirPath: string): Promise<{ nodes: FileTreeNode[]; error?: FsReadTreeError }>;
+    readTreeWithError(dirPath: string): Promise<{ nodes: FileTreeNode[]; error?: FsReadTreeError; skippedCount: number }>;
     readFile(filePath: string): Promise<string>;
     writeFile(filePath: string, content: string): Promise<void>;
     delete(filePath: string): Promise<void>;

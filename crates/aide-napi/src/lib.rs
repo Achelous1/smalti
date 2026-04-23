@@ -40,20 +40,33 @@ fn file_node_to_exported(n: aide_core::FileNode) -> ExportedFileNode {
     }
 }
 
+/// String enum for `ExportedReadTreeError.code`.
+/// napi-rs marshals this to/from `'EPERM' | 'ENOENT' | 'ENOTDIR' | 'UNKNOWN'` on the TS side,
+/// which is stronger than a plain `string`.
+#[napi(string_enum)]
+pub enum ExportedReadTreeErrorCode {
+    EPERM,
+    ENOENT,
+    ENOTDIR,
+    UNKNOWN,
+}
+
 /// Mirrors FsReadTreeError in TypeScript ipc.ts.
 #[napi(object)]
 pub struct ExportedReadTreeError {
-    /// "EPERM" | "ENOENT" | "ENOTDIR" | "UNKNOWN"
-    pub code: String,
+    pub code: ExportedReadTreeErrorCode,
     pub path: String,
     pub message: String,
 }
 
-/// Return value of read_tree_with_error — mirrors { nodes, error? } in TS.
+/// Return value of read_tree_with_error — mirrors { nodes, error?, skippedCount } in TS.
 #[napi(object)]
 pub struct ExportedReadTreeResult {
     pub nodes: Vec<ExportedFileNode>,
     pub error: Option<ExportedReadTreeError>,
+    /// Number of entries skipped because their names were not valid UTF-8.
+    /// Zero on most systems; non-zero only on Linux ext4/tmpfs with non-UTF8 filenames.
+    pub skipped_count: u32,
 }
 
 /// Converts an `io::Error` to a `napi::Error` with a Node.js-compatible error code
@@ -94,14 +107,15 @@ pub fn read_tree_with_error(dir_path: String) -> ExportedReadTreeResult {
         nodes: result.nodes.into_iter().map(file_node_to_exported).collect(),
         error: result.error.map(|e| ExportedReadTreeError {
             code: match e.code {
-                aide_core::ReadTreeErrorCode::EPERM => "EPERM".to_string(),
-                aide_core::ReadTreeErrorCode::ENOENT => "ENOENT".to_string(),
-                aide_core::ReadTreeErrorCode::ENOTDIR => "ENOTDIR".to_string(),
-                aide_core::ReadTreeErrorCode::UNKNOWN => "UNKNOWN".to_string(),
+                aide_core::ReadTreeErrorCode::EPERM => ExportedReadTreeErrorCode::EPERM,
+                aide_core::ReadTreeErrorCode::ENOENT => ExportedReadTreeErrorCode::ENOENT,
+                aide_core::ReadTreeErrorCode::ENOTDIR => ExportedReadTreeErrorCode::ENOTDIR,
+                aide_core::ReadTreeErrorCode::UNKNOWN => ExportedReadTreeErrorCode::UNKNOWN,
             },
             path: e.path,
             message: e.message,
         }),
+        skipped_count: result.skipped_count,
     }
 }
 
