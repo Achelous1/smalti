@@ -20,8 +20,13 @@ const BATCH_BYTES_MAX: usize = 64 * 1024;
 pub struct PtyHandle {
     /// Locked write-end of the master PTY.
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
-    /// Locked master for resize.
-    master: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
+    /// Locked master for resize and explicit shutdown.
+    ///
+    /// Wrapping in `Option` lets `kill()` take and drop the master, which
+    /// closes the PTY pipe.  On Windows ConPTY, dropping the master is the
+    /// only reliable way to make the reader's `read()` return EOF — the
+    /// backend does not signal EOF automatically when the child exits.
+    master: Arc<Mutex<Option<Box<dyn portable_pty::MasterPty + Send>>>>,
     /// Locked child for kill.
     child: Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>>,
     /// Reader thread handle — joined on drop.
@@ -30,10 +35,10 @@ pub struct PtyHandle {
 
 impl Drop for PtyHandle {
     fn drop(&mut self) {
-        // Best-effort kill; ignore errors (child may already be dead).
-        if let Ok(mut child) = self.child.lock() {
-            let _ = child.kill();
-        }
+        // `kill()` terminates the child and drops the master, which closes the
+        // PTY pipe and unblocks the reader thread's `read()`.  Idempotent —
+        // safe to call even if the caller already invoked `kill()` manually.
+        let _ = self.kill();
         if let Some(t) = self.reader_thread.take() {
             let _ = t.join();
         }
@@ -54,16 +59,33 @@ impl PtyHandle {
         let master = self.master.lock().map_err(|_| {
             io::Error::new(io::ErrorKind::Other, "pty master lock poisoned")
         })?;
-        master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+        match master.as_ref() {
+            Some(m) => m.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())),
+            None => Err(io::Error::new(io::ErrorKind::Other, "pty already closed")),
+        }
     }
 
-    /// Kill the PTY child process.
+    /// Kill the PTY child process and close the master PTY.
+    ///
+    /// Closing the master drops the pipe, which causes the reader thread's
+    /// `read()` to return EOF (or an error) and unblock it.  This is the
+    /// mechanism that makes Drop reliable on Windows ConPTY, where the backend
+    /// does not signal EOF when the child exits on its own.
+    ///
+    /// Idempotent: calling `kill()` a second time is a no-op (master is already
+    /// `None`, child kill returns an error that is silently ignored).
     pub fn kill(&self) -> io::Result<()> {
-        let mut child = self.child.lock().map_err(|_| {
-            io::Error::new(io::ErrorKind::Other, "pty child lock poisoned")
-        })?;
-        child.kill().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+        // Kill child first (best-effort).
+        if let Ok(mut child) = self.child.lock() {
+            let _ = child.kill();
+        }
+        // Take and drop the master to close the PTY pipe.  This unblocks the
+        // reader thread on platforms where read() doesn't return EOF otherwise.
+        if let Ok(mut master) = self.master.lock() {
+            *master = None;
+        }
+        Ok(())
     }
 }
 
@@ -114,7 +136,7 @@ pub fn spawn_pty(
         .try_clone_reader()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-    let master = Arc::new(Mutex::new(pair.master));
+    let master = Arc::new(Mutex::new(Some(pair.master)));
     let child: Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>> = Arc::new(Mutex::new(child));
     let writer = Arc::new(Mutex::new(writer));
 
@@ -224,6 +246,43 @@ pub fn spawn_pty(
             f(exit_code);
         }
     });
+
+    // Watchdog thread: polls the child every 100ms and drops the master when
+    // the child exits naturally (no explicit kill()).  On Windows ConPTY the
+    // master stays open after the child exits, so the reader's read() would
+    // block forever without this.  On Unix the watchdog's master-drop is a
+    // no-op (master is already None or the pipe already got EOF), so running
+    // it cross-platform is safe and avoids a cfg gate.
+    {
+        let master_for_watchdog = Arc::clone(&master);
+        let child_for_watchdog = Arc::clone(&child);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_millis(100));
+                // If master was already taken (explicit kill or previous loop),
+                // there is nothing left to do.
+                let master_gone = match master_for_watchdog.lock() {
+                    Ok(m) => m.is_none(),
+                    Err(_) => true, // lock poisoned — bail
+                };
+                if master_gone {
+                    return;
+                }
+                // Poll child without blocking.
+                let exited = match child_for_watchdog.lock() {
+                    Ok(mut c) => matches!(c.try_wait(), Ok(Some(_))),
+                    Err(_) => true, // lock poisoned — bail
+                };
+                if exited {
+                    // Close the master to unblock the reader thread's read().
+                    if let Ok(mut m) = master_for_watchdog.lock() {
+                        *m = None;
+                    }
+                    return;
+                }
+            }
+        });
+    }
 
     Ok(PtyHandle {
         writer,
@@ -492,15 +551,11 @@ mod tests_windows {
     /// Spawn `cmd.exe /C echo hello`, collect on_data output,
     /// assert "hello" substring is received via ConPTY.
     ///
-    /// IGNORED: Windows ConPTY does not signal EOF on the master when the
-    /// child process exits. The reader thread stays blocked in `read()`
-    /// indefinitely, so `on_exit` never fires and Drop's thread-join hangs
-    /// as well. The production `spawnPty` path works for interactive sessions
-    /// where the caller keeps the PtyHandle alive, but this one-shot test
-    /// pattern needs reader-thread shutdown fixes (explicit master drop on
-    /// stop, or a `child.try_wait()` poll loop). Tracked as a Phase 3
-    /// follow-up; build itself is still verified on Windows CI.
-    #[ignore = "ConPTY reader thread shutdown not implemented — see docstring"]
+    /// Previously ignored because Windows ConPTY does not signal EOF on the
+    /// master when the child process exits, causing the reader thread to block
+    /// in `read()` indefinitely.  Fixed by wrapping `master` in `Option` and
+    /// dropping it in `kill()` / `Drop`, which closes the pipe and unblocks
+    /// the reader thread.
     #[test]
     fn test_pty_spawn_cmd_echo_windows() {
         let (tx_data, rx_data) = mpsc::channel::<String>();
