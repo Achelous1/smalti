@@ -14,7 +14,9 @@ function safeCwd() {
   return "/tmp";
 }
 const PLUGINS_DIR = path.join(safeCwd(), ".aide", "plugins");
-const WORKSPACE = process.env.AIDE_WORKSPACE || safeCwd();
+// Back-compat: AIDE_* fallback until task_reb_f03 (v0.2.0)
+// TODO(task_reb_f03): drop AIDE_WORKSPACE fallback after v0.2.0.
+const WORKSPACE = process.env.SMALTI_WORKSPACE || process.env.AIDE_WORKSPACE || safeCwd();
 
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + "\n");

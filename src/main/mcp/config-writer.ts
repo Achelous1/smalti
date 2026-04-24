@@ -175,7 +175,7 @@ export function writeMcpConfig(workspacePath: string): string {
         command: 'node',
         args: [getMcpServerPath()],
         env: {
-          AIDE_WORKSPACE: workspacePath,
+          SMALTI_WORKSPACE: workspacePath,
         },
       },
     },

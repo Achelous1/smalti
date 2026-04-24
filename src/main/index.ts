@@ -55,7 +55,7 @@ const createWindow = (): void => {
     y: windowBounds?.y,
     minWidth: 800,
     minHeight: 600,
-    title: 'AIDE',
+    title: 'smalti',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       contextIsolation: true,
