@@ -14,7 +14,7 @@ export function TitleBar() {
 
       {/* Centered title */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-[13px] font-bold font-mono text-aide-accent">&gt; aide</span>
+        <span className="text-[13px] font-bold font-mono text-aide-accent">&gt; smalti</span>
       </div>
 
       {/* Right side: theme toggle */}

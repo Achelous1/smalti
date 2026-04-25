@@ -108,7 +108,7 @@ export function WelcomePage({ recentProjects }: WelcomePageProps) {
         className="h-10 relative flex items-center justify-center border-b border-[var(--border)] flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <span className="text-sm font-bold text-[var(--text-secondary)] pointer-events-none">&gt; aide</span>
+        <span className="text-sm font-bold text-[var(--text-secondary)] pointer-events-none">&gt; smalti</span>
       </header>
 
       {/* Body */}

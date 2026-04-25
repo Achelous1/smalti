@@ -26,6 +26,25 @@ describe('renderer-visible brand strings (D6 follow-up)', () => {
     expect(c).not.toContain("'> aide_'");
   });
 
+  it('TitleBar centered title is "> smalti" (not aide)', () => {
+    const c = fs.readFileSync(
+      path.resolve(ROOT, 'src/renderer/components/layout/TitleBar.tsx'),
+      'utf-8',
+    );
+    expect(c).toContain('&gt; smalti');
+    expect(c).not.toMatch(/&gt;\s*aide</);
+  });
+
+  it('Welcome topbar centered label is "> smalti" (not aide)', () => {
+    const c = fs.readFileSync(
+      path.resolve(ROOT, 'src/renderer/components/welcome/WelcomePage.tsx'),
+      'utf-8',
+    );
+    // Welcome has both: top bar "> smalti" and hero "> smalti_"
+    expect(c).toContain('&gt; smalti<');
+    expect(c).not.toMatch(/&gt;\s*aide</);
+  });
+
   it('PermissionBanner error message uses smalti, not AIDE', () => {
     const c = fs.readFileSync(
       path.resolve(ROOT, 'src/renderer/components/file-explorer/PermissionBanner.tsx'),
