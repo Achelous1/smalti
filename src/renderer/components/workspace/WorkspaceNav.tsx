@@ -420,25 +420,25 @@ export function WorkspaceNav() {
         const isActive = ws.id === activeWorkspaceId;
         const status = getWorkspaceStatus(ws.id);
         return (
-          <button
-            key={ws.id}
-            onClick={() => setActive(ws.id)}
-            title={ws.name}
-            data-active={isActive ? 'true' : 'false'}
-            className={`relative flex items-center justify-center w-7 h-7 rounded-[6px] text-[11px] font-bold font-mono transition-colors ${
-              isActive
-                ? 'bg-smalti-skyblue/15 text-aide-text-primary'
-                : 'text-aide-text-secondary hover:bg-aide-surface-elevated hover:text-aide-text-primary'
-            }`}
-          >
-            <span
-              className={`w-7 h-7 rounded-[6px] flex items-center justify-center text-white text-[11px] font-bold${isActive ? ' ring-2 ring-smalti-skyblue' : ''}`}
-              style={{ backgroundColor: ws.color }}
+          <Tooltip key={ws.id} content={`${ws.name}\n${ws.path}`} placement="right">
+            <button
+              onClick={() => setActive(ws.id)}
+              data-active={isActive ? 'true' : 'false'}
+              className={`relative flex items-center justify-center w-7 h-7 rounded-[6px] text-[11px] font-bold font-mono transition-colors ${
+                isActive
+                  ? 'bg-smalti-skyblue/15 text-aide-text-primary'
+                  : 'text-aide-text-secondary hover:bg-aide-surface-elevated hover:text-aide-text-primary'
+              }`}
             >
-              {ws.name[0]?.toUpperCase() ?? '?'}
-            </span>
-            {status && <StatusBadge status={status} />}
-          </button>
+              <span
+                className={`w-7 h-7 rounded-[6px] flex items-center justify-center text-white text-[11px] font-bold${isActive ? ' ring-2 ring-smalti-skyblue' : ''}`}
+                style={{ backgroundColor: ws.color }}
+              >
+                {ws.name[0]?.toUpperCase() ?? '?'}
+              </span>
+              {status && <StatusBadge status={status} />}
+            </button>
+          </Tooltip>
         );
       })}
 
@@ -446,13 +446,14 @@ export function WorkspaceNav() {
 
       <div className="flex-1" />
 
-      <button
-        onClick={handleAddWorkspace}
-        title="New Workspace"
-        className="flex items-center justify-center w-7 h-7 rounded-[6px] text-aide-text-secondary bg-aide-surface-elevated border border-aide-border hover:text-aide-text-primary transition-colors text-base font-mono"
-      >
-        +
-      </button>
+      <Tooltip content="New Workspace" placement="right">
+        <button
+          onClick={handleAddWorkspace}
+          className="flex items-center justify-center w-7 h-7 rounded-[6px] text-aide-text-secondary bg-aide-surface-elevated border border-aide-border hover:text-aide-text-primary transition-colors text-base font-mono"
+        >
+          +
+        </button>
+      </Tooltip>
 
       <UpdateNotice collapsed />
     </div>
