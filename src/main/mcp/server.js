@@ -1,20 +1,22 @@
 #!/usr/bin/env node
 "use strict";
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
-const crypto = require("crypto");
+const fs = require("fs"); // eslint-disable-line @typescript-eslint/no-require-imports
+const path = require("path"); // eslint-disable-line @typescript-eslint/no-require-imports
+const vm = require("vm"); // eslint-disable-line @typescript-eslint/no-require-imports
+const crypto = require("crypto"); // eslint-disable-line @typescript-eslint/no-require-imports
 
 function safeCwd() {
   // process.cwd() throws EPERM in packaged Electron apps when launched from Finder
   // (HOME=/ or unmounted cwd). Fall back to HOME / getpwuid / /tmp.
   try { return process.cwd(); } catch { /* EPERM uv_cwd */ }
   if (process.env.HOME && process.env.HOME !== "/") return process.env.HOME;
-  try { return require("os").userInfo().homedir; } catch { /* ignore */ }
+  try { return require("os").userInfo().homedir; } catch { /* getpwuid fallback unavailable */ } // eslint-disable-line @typescript-eslint/no-require-imports
   return "/tmp";
 }
-const PLUGINS_DIR = path.join(safeCwd(), ".aide", "plugins");
-const WORKSPACE = process.env.AIDE_WORKSPACE || safeCwd();
+const PLUGINS_DIR = path.join(safeCwd(), ".smalti", "plugins");
+// Back-compat: AIDE_* fallback until task_reb_f03 (v0.2.0)
+// TODO(task_reb_f03): drop AIDE_WORKSPACE fallback after v0.2.0.
+const WORKSPACE = process.env.SMALTI_WORKSPACE || process.env.AIDE_WORKSPACE || safeCwd();
 
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + "\n");
@@ -29,7 +31,7 @@ function scanPluginsDir(dir) {
     if (!entry.isDirectory()) continue;
     const specPath = path.join(dir, entry.name, "plugin.spec.json");
     if (!fs.existsSync(specPath)) continue;
-    try { specs.push(JSON.parse(fs.readFileSync(specPath, "utf-8"))); } catch {}
+    try { specs.push(JSON.parse(fs.readFileSync(specPath, "utf-8"))); } catch { /* skip malformed spec */ }
   }
   return specs;
 }
@@ -51,7 +53,7 @@ function resolvePluginDir(pluginName) {
           if (fs.existsSync(path.join(localDir, entryPoint))) {
             return { dir: localDir, base: PLUGINS_DIR, entryPoint };
           }
-        } catch {}
+        } catch { /* skip unreadable spec */ }
       }
     }
   }
@@ -62,7 +64,7 @@ function invokePluginTool(pluginName, toolName, args) {
   const resolved = resolvePluginDir(pluginName);
   if (!resolved) throw new Error("Plugin not found: " + pluginName);
   var permissions = [];
-  try { permissions = JSON.parse(fs.readFileSync(path.join(resolved.dir, "plugin.spec.json"), "utf-8")).permissions || []; } catch {}
+  try { permissions = JSON.parse(fs.readFileSync(path.join(resolved.dir, "plugin.spec.json"), "utf-8")).permissions || []; } catch { /* default to empty permissions on parse error */ }
   var hasFsRead = permissions.includes("fs:read");
   var hasFsWrite = permissions.includes("fs:write");
   var hasFsPerm = hasFsRead || hasFsWrite;
@@ -188,7 +190,7 @@ function editPlugin(params) {
   return spec;
 }
 
-const CREATE_PLUGIN_DESC = `Create a new AIDE plugin from code. Plugins are installed in the workspace ({workspace}/.aide/plugins). The code must be a CommonJS module exporting { name, version, tools, invoke(toolName, args) }.
+const CREATE_PLUGIN_DESC = `Create a new Smalti plugin from code. Plugins are installed in the workspace ({workspace}/.smalti/plugins). The code must be a CommonJS module exporting { name, version, tools, invoke(toolName, args) }.
 
 Sandbox Environment:
 - require('path') → always available
@@ -203,7 +205,7 @@ Sandbox Environment:
 - An index.html is auto-generated for iframe rendering. Pass the optional 'html' parameter to aide_create_plugin to provide a custom UI in one step.
 
 HTML UI (iframe) Event API:
-Plugin iframes receive FILES tab events via postMessage from the AIDE renderer.
+Plugin iframes receive FILES tab events via postMessage from the Smalti renderer.
 
 Constraints (sandbox="allow-scripts", no allow-same-origin):
 - file:// URLs are BLOCKED inside the iframe. Never set frame.src = 'file://' + path.
@@ -216,7 +218,7 @@ Available iframe APIs:
   window.aide.emit() — reserved for future use
 
 window.aide shim:
-AIDE automatically injects the window.aide shim into all plugin iframes — both auto-generated and custom HTML. You do NOT need to include the shim manually in custom HTML.
+Smalti automatically injects the window.aide shim into all plugin iframes — both auto-generated and custom HTML. You do NOT need to include the shim manually in custom HTML.
 
 Theme sync API:
   window.aide is automatically notified of theme changes via postMessage. Additionally you can listen:
@@ -240,9 +242,9 @@ eventBindings (.aide/settings.json): controls backend tool invocation on file ev
   Example: { "eventBindings": { "file:clicked": [{ "plugin": "my-plugin", "tool": "on-file-clicked", "args": {} }] } }
 
 Theme Support (REQUIRED):
-AIDE runs in both dark and light themes. Your plugin MUST work in both.
+Smalti runs in both dark and light themes. Your plugin MUST work in both.
 
-CSS variables are AUTO-INJECTED into every plugin iframe by AIDE — you do NOT need to define :root, .light, or @media(prefers-color-scheme) blocks yourself. Just reference the variables:
+CSS variables are AUTO-INJECTED into every plugin iframe by Smalti — you do NOT need to define :root, .light, or @media(prefers-color-scheme) blocks yourself. Just reference the variables:
 
   background: var(--background);
   color: var(--text-primary);
@@ -250,14 +252,14 @@ CSS variables are AUTO-INJECTED into every plugin iframe by AIDE — you do NOT 
   color: var(--accent);
 
 Runtime theme switching:
-AIDE sends postMessage({theme: 'dark'|'light'}) to the plugin iframe whenever the user toggles theme. The injected shim automatically updates document.documentElement.className, which triggers the .light class variables. Your CSS will re-render without any code on your side — provided you used var() references, not hardcoded colors.
+Smalti sends postMessage({theme: 'dark'|'light'}) to the plugin iframe whenever the user toggles theme. The injected shim automatically updates document.documentElement.className, which triggers the .light class variables. Your CSS will re-render without any code on your side — provided you used var() references, not hardcoded colors.
 
 Detecting current theme from JS:
   const isLight = document.documentElement.classList.contains('light');
 
 NEVER hardcode colors like #000, #fff, black, white, or any hex literal for UI surfaces. Always use the CSS variables below. Hardcoding will break one of the two themes.
 
-IMPORTANT — AIDE Design System Rules:
+IMPORTANT — Smalti Design System Rules:
 If the plugin produces UI output (HTML/CSS), it MUST use these CSS custom properties (not hardcoded colors):
 
 Dark theme (default):
@@ -285,19 +287,19 @@ Style rules:
 - Dark/light parity: test both themes mentally before finalizing. If a color looks good on dark but unreadable on light (or vice versa), you've used the wrong variable. Example: buttons use var(--accent) for bg + #000 for text — this works because --accent differs per theme but black text stays readable on emerald in both.
 
 CDN Libraries (OFFLINE-CAPABLE):
-Plugins can load external libraries via the aide-cdn:// protocol, which caches files locally for offline use.
-Usage: <script src="aide-cdn://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-URL format: aide-cdn://{cdn-hostname}/{path} — maps to https://{cdn-hostname}/{path}
+Plugins can load external libraries via the smalti-cdn:// protocol, which caches files locally for offline use.
+Usage: <script src="smalti-cdn://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+URL format: smalti-cdn://{cdn-hostname}/{path} — maps to https://{cdn-hostname}/{path}
 Supported hosts: cdn.jsdelivr.net, unpkg.com, cdnjs.cloudflare.com, esm.sh, or any HTTPS CDN.
-First load requires network; subsequent loads work fully offline from ~/.aide/cdn-cache/.
+First load requires network; subsequent loads work fully offline from ~/.smalti/cdn-cache/.
 ALWAYS pin versions (e.g. chart.js@4.4.1, not chart.js@latest) — cache is keyed by exact URL path.
 Common examples:
-  Chart.js: aide-cdn://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js
-  D3: aide-cdn://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js
-  Three.js: aide-cdn://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js
-  Marked: aide-cdn://cdn.jsdelivr.net/npm/marked@15.0.0/marked.min.js
-  Tailwind CSS: aide-cdn://cdn.jsdelivr.net/npm/@tailwindcss/browser@4/cdn.min.js
-NEVER use raw https:// URLs — they are blocked by the plugin sandbox. ALWAYS use aide-cdn:// prefix.`;
+  Chart.js: smalti-cdn://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js
+  D3: smalti-cdn://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js
+  Three.js: smalti-cdn://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js
+  Marked: smalti-cdn://cdn.jsdelivr.net/npm/marked@15.0.0/marked.min.js
+  Tailwind CSS: smalti-cdn://cdn.jsdelivr.net/npm/@tailwindcss/browser@4/cdn.min.js
+NEVER use raw https:// URLs — they are blocked by the plugin sandbox. ALWAYS use smalti-cdn:// prefix.`;
 
 function getBuiltinTools() {
   const builtins = [
@@ -320,23 +322,23 @@ function getBuiltinTools() {
     },
     {
       name: "aide_list_plugins",
-      description: "List all installed AIDE plugins with their tools.",
+      description: "List all installed Smalti plugins with their tools.",
       inputSchema: { type: "object", properties: {} }
     },
     {
       name: "aide_invoke_tool",
-      description: "Invoke a tool from an installed AIDE plugin.",
+      description: "Invoke a tool from an installed Smalti plugin.",
       inputSchema: { type: "object", properties: { plugin_name: { type: "string" }, tool_name: { type: "string" }, args: { type: "object" } }, required: ["plugin_name", "tool_name"] }
     },
     {
       name: "aide_edit_plugin",
-      description: "Edit an existing AIDE plugin in-place. Only provided fields are updated — omitted fields are left unchanged. Useful for patching code or UI without deleting and recreating the plugin.",
+      description: "Edit an existing Smalti plugin in-place. Only provided fields are updated — omitted fields are left unchanged. Useful for patching code or UI without deleting and recreating the plugin.",
       inputSchema: {
         type: "object",
         properties: {
           name: { type: "string", description: "Plugin name to edit" },
           code: { type: "string", description: "New index.js source (CommonJS module). Replaces existing code." },
-          html: { type: "string", description: "New index.html content. Replaces existing UI. The window.aide shim is automatically injected by AIDE — no manual inclusion needed." },
+          html: { type: "string", description: "New index.html content. Replaces existing UI. The window.aide shim is automatically injected by Smalti — no manual inclusion needed." },
           description: { type: "string", description: "Updated plugin description." },
           permissions: { type: "array", items: { type: "string" }, description: "Updated permissions list." },
           tools: { type: "array", description: "Updated tool definitions.", items: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, parameters: { type: "object" } } } },
@@ -347,7 +349,7 @@ function getBuiltinTools() {
     },
     {
       name: "aide_delete_plugin",
-      description: "Delete an installed AIDE plugin.",
+      description: "Delete an installed Smalti plugin.",
       inputSchema: {
         type: "object",
         properties: {
@@ -375,7 +377,7 @@ function getBuiltinTools() {
 function handleRequest(method, id, params) {
   try {
     if (method === "initialize") {
-      sendResult(id, { protocolVersion: params.protocolVersion || "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "aide", version: "0.1.0" } });
+      sendResult(id, { protocolVersion: params.protocolVersion || "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "smalti", version: "0.1.0" } });
     } else if (method === "tools/list") {
       sendResult(id, { tools: getBuiltinTools() });
     } else if (method === "tools/call") {
@@ -423,7 +425,7 @@ function processBuffer() {
     const line = buffer.slice(0, newline).trim();
     buffer = buffer.slice(newline + 1);
     if (!line) continue;
-    try { const msg = JSON.parse(line); if (msg.method) handleRequest(msg.method, msg.id, msg.params); } catch {}
+    try { const msg = JSON.parse(line); if (msg.method) handleRequest(msg.method, msg.id, msg.params); } catch { /* skip malformed JSON-RPC line */ }
   }
 }
 process.stdin.setEncoding("utf-8");

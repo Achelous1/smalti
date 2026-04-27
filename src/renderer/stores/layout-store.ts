@@ -712,12 +712,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             sessionId = agentResult.sessionId;
           } else {
             // agent not installed or spawn failed — fall back to plain shell
-            console.warn('[AIDE] Session restore: agent spawn failed, falling back to shell', agentResult.error);
+            console.warn('[smalti] Session restore: agent spawn failed, falling back to shell', agentResult.error);
             const shellResult = await window.aide.terminal.spawn({ cwd: wsPath });
             if (shellResult.ok) {
               sessionId = shellResult.sessionId;
             } else {
-              console.warn('[AIDE] Session restore: shell spawn also failed, skipping tab', shellResult.error);
+              console.warn('[smalti] Session restore: shell spawn also failed, skipping tab', shellResult.error);
               restoreFailCount++;
             }
           }
@@ -738,25 +738,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         }
       }
 
-      // Fallback: ensure pane has at least one tab
-      if (tabs.length === 0) {
-        const fallbackResult = await window.aide.terminal.spawn({ cwd: wsPath });
-        if (fallbackResult.ok) {
-          const tab: TerminalTab = {
-            id: crypto.randomUUID(),
-            type: 'shell',
-            sessionId: fallbackResult.sessionId,
-            title: '$ shell',
-          };
-          tabs.push(tab);
-          useTerminalStore.getState().addTab(tab);
-          activeTabId = tab.id;
-        } else {
-          console.warn('[AIDE] Session restore: fallback shell spawn failed', fallbackResult.error);
-          restoreFailCount++;
-        }
-      }
-
+      // Empty panes intentionally render <EmptyState /> (the hero / agent
+      // picker). No auto-spawn fallback — entering a workspace that ended
+      // its last session with no live tabs should leave the user on the
+      // hero, not slap a shell on screen.
       if (!activeTabId && tabs.length > 0) {
         activeTabId = tabs[0].id;
       }

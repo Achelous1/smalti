@@ -1,16 +1,28 @@
 [한국어](./README_kor.md) · **English**
 
-# AIDE — AI-Driven IDE
+<p align="center">
+  <img src="docs/brand/smalti-icon-source-1024.png" width="180" alt="smalti logo" />
+</p>
+
+# smalti — AI-Driven IDE
 
 > A terminal-centric IDE that integrates CLI code agents (Claude Code, Gemini CLI, Codex CLI) and lets you generate plugins from natural language via the **Create n Play** system.
+
+> 🎨 **Rebrand in progress**: Product name transitioning from AIDE to **smalti** (Italian for *Byzantine glass mosaic tiles*) — code identifiers (protocols, env vars, package name) still use the legacy `aide` prefix and will migrate with v0.1.0 pending trademark clearance. See [`docs/ideation/rebrand-smalti.md`](docs/ideation/rebrand-smalti.md).
 
 ---
 
 ## Overview
 
-AIDE is an Electron-based IDE built around a single core idea: **the IDE should adapt to you, not the other way around**. Instead of installing dozens of pre-built plugins from a marketplace, you describe what you want in natural language and an AI agent generates a working plugin instantly. The plugin runs in a sandboxed environment, registers itself as an AI tool, and is immediately usable both by you and by the AI assistant.
+smalti is an Electron-based IDE built around a single core idea: **the IDE should adapt to you, not the other way around**. Instead of installing dozens of pre-built plugins from a marketplace, you describe what you want in natural language and an AI agent generates a working plugin instantly. The plugin runs in a sandboxed environment, registers itself as an AI tool, and is immediately usable both by you and by the AI assistant.
 
-AIDE does not call LLM APIs directly. It spawns CLI agents (`claude`, `gemini`, `codex`) as PTY processes via `node-pty`, so each agent manages its own authentication and you keep full control of your provider relationships.
+<p align="center">
+  <img src="docs/assets/screenshot-hero-overview.png" alt="smalti full workspace — multi-pane layout with terminals, code, and plugin UI" />
+  <br/>
+  <sub><em>A typical workspace: multi-agent terminals, code editor pane, and a plugin-rendered kanban board — all in one window.</em></sub>
+</p>
+
+smalti does not call LLM APIs directly. It spawns CLI agents (`claude`, `gemini`, `codex`) as PTY processes via a Rust `portable-pty`-backed native module, so each agent manages its own authentication and you keep full control of your provider relationships.
 
 ---
 
@@ -23,9 +35,9 @@ Existing IDEs (IntelliJ, VSCode) have huge plugin ecosystems, but:
 - Building your own plugin requires learning a heavy SDK and a build pipeline
 - The mental tax of context-switching between IDE, terminal, and AI chat slows you down
 
-AIDE collapses this stack:
+smalti collapses this stack:
 
-- **One workspace** holds your terminal, AI agents, file tree, Git, and plugin UIs
+- **One workspace** holds your terminal, AI agents, file tree, and plugin UIs
 - **Natural-language plugins** mean the marginal cost of "I wish my IDE could do X" drops to a single sentence
 - **CLI-first** means you bring your own agent and your own auth — no vendor lock-in
 
@@ -39,16 +51,23 @@ AIDE collapses this stack:
 | **Split-screen layout** | Up to a 3×2 grid of panes. Drag tabs between panes to split, or to a pane edge to create a new split. Layout persists per workspace. |
 | **Workspace management** | Multi-project navigation, recent project history, per-workspace tab/layout/plugin state, automatic restoration on launch. |
 | **Plugin system (Create n Play)** | Natural-language plugin generation via MCP. Plugins run in a VM sandbox with permission-gated filesystem access and render their UI as iframe tabs. |
-| **Hot reload** | Plugin code, HTML, and disk additions are picked up live without restarting AIDE. New plugins created by the AI appear in the panel instantly. |
+| **Hot reload** | Plugin code, HTML, and disk additions are picked up live without restarting smalti. New plugins created by the AI appear in the panel instantly. |
 | **Offline CDN** | Plugins load external libraries via the `aide-cdn://` protocol, which caches CDN assets locally so plugins keep working offline. |
 | **Agent status indicators** | Real-time visual feedback (idle / processing / awaiting input) for every agent session, surfaced in the workspace navbar. |
 | **Theme system** | Dark and light themes with smooth transitions, JetBrains Mono typography, agent-specific accent colors. |
+| **Rust core** | File system, watcher, and PTY operations run in a Rust `portable-pty` + `notify` native module (napi-rs). Idle CPU dropped from ~127% to ~0% on packaged builds; Korean / emoji terminal output no longer corrupts at read boundaries. |
+
+<p align="center">
+  <img src="docs/assets/screenshot-split-panes.png" alt="Split panes — terminal on the left, code editor on the right" />
+  <br/>
+  <sub><em>Split-screen layout: an agent session on the left, code editing on the right. Drag tabs between panes to rearrange on the fly.</em></sub>
+</p>
 
 ---
 
 ## Key Features — Plugin Creation
 
-AIDE plugins are created entirely through natural language conversation with an AI agent. There is no manual SDK, no boilerplate generator, no build step.
+smalti plugins are created entirely through natural language conversation with an AI agent. There is no manual SDK, no boilerplate generator, no build step.
 
 ### The Create n Play flow
 
@@ -59,10 +78,10 @@ You:    "Make a plugin that highlights unused TypeScript imports
 Agent:  (uses MCP aide_create_plugin tool)
         → generates plugin.spec.json (id, name, permissions, tools)
         → generates plugin source code (CommonJS module)
-        → generates index.html UI with AIDE design tokens
+        → generates index.html UI with smalti design tokens
         → registers as an MCP tool the agent itself can later invoke
 
-AIDE:   Plugin appears in the Plugins panel. Toggle ON to activate.
+smalti: Plugin appears in the Plugins panel. Toggle ON to activate.
         Click "Open as tab" to render its UI inside a pane.
 ```
 
@@ -87,12 +106,13 @@ AIDE:   Plugin appears in the Plugins panel. Toggle ON to activate.
 
 ### Plugin scopes
 
-| Scope | Location | Use case |
-|---|---|---|
-| **Local** | `<workspace>/.aide/plugins/` | Project-specific tools (linters, formatters, code generators tailored to one repo) |
-| **Global** | `~/.aide/plugins/` | Reusable tools available across all workspaces |
+Plugins are **workspace-local**. Each plugin lives under `<workspace>/.aide/plugins/<plugin-id>/` and is visible only in that workspace. Runtime-added plugins (via MCP, file manager, or direct copy) are auto-discovered without restart.
 
-Plugins added at runtime (via MCP, manual file copy, or any file manager) are auto-discovered without restarting the app.
+<p align="center">
+  <img src="docs/assets/screenshot-plugin-kanban.png" alt="Plugin UI — agent-todo-board kanban rendered as a pane" />
+  <br/>
+  <sub><em>A plugin generated from natural language (<code>agent-todo-board</code>) rendering its UI as a full pane, alongside the agent session that created it.</em></sub>
+</p>
 
 ---
 
@@ -100,13 +120,14 @@ Plugins added at runtime (via MCP, manual file copy, or any file manager) are au
 
 ### Requirements
 
-- **macOS** (Apple Silicon or Intel) — Windows and Linux builds are planned
+- **macOS** (Apple Silicon or Intel) — Windows / Linux: source install works (CI validates all 3 OSes); packaged DMG releases are currently macOS-only.
 - **Node.js** ≥ 18
 - **pnpm** (the project uses `node-linker=hoisted`, so npm/yarn will not work as-is)
+- **Rust** (rustup with stable ≥ 1.82) — required for the Rust core. `pnpm install` auto-builds it. If rustup isn't present: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`. If Homebrew rustc is also installed, the build script prepends `~/.cargo/bin` to PATH so rustup takes priority — no manual action needed.
 
 ### Optional CLI agents
 
-AIDE detects installed agents automatically. Install whichever you use:
+smalti detects installed agents automatically. Install whichever you use:
 
 ```bash
 # Claude Code
@@ -124,10 +145,12 @@ Each CLI manages its own authentication (`claude login`, `gemini auth`, etc.).
 ### Run from source
 
 ```bash
-git clone https://github.com/Achelous1/aide.git
-cd aide
-pnpm install
-pnpm start    # dev server with HMR
+git clone https://github.com/Achelous1/smalti.git
+cd smalti
+pnpm install   # also runs a postinstall hook that builds the Rust native module
+               # via scripts/build-native.mjs; first install compiles aide-core +
+               # aide-napi (~30s); subsequent installs use cargo cache
+pnpm start     # dev server with HMR
 ```
 
 ### Build a distributable
@@ -136,23 +159,23 @@ pnpm start    # dev server with HMR
 sh build.sh   # macOS — produces out/AIDE.dmg
 ```
 
-The build script handles dependency install, lint, package, and DMG creation with a drag-and-drop installer layout.
+The build script handles dependency install, lint, package, and DMG creation with a drag-and-drop installer layout. It also runs `pnpm run build:native:universal` to produce a lipo-merged arm64 + x64 universal binary, so the DMG runs on both Apple Silicon and Intel Macs.
 
 ### macOS Gatekeeper (unsigned build)
 
-The distributed DMG is not code-signed, so macOS quarantines it on first launch ("AIDE is damaged and can't be opened"). After dragging AIDE into `/Applications`, strip the quarantine attribute:
+The distributed DMG is not code-signed, so macOS quarantines it on first launch ("smalti is damaged and can't be opened"). After dragging smalti into `/Applications`, strip the quarantine attribute:
 
 ```bash
-xattr -cr /Applications/AIDE.app
+xattr -c /Applications/AIDE.app
 ```
 
-Then launch AIDE normally.
+Then launch smalti normally.
 
 ---
 
 ## Architecture
 
-AIDE follows Electron's three-process model with strict security boundaries.
+smalti follows Electron's three-process model with strict security boundaries.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -175,13 +198,15 @@ AIDE follows Electron's three-process model with strict security boundaries.
 │                       Main Process (Node.js)             │
 │  ┌─────────────┐ ┌────────────┐ ┌──────────────────────┐ │
 │  │ Terminal    │ │ Plugin     │ │ MCP Server           │ │
-│  │ (node-pty)  │ │ Registry   │ │ (NDJSON over stdio)  │ │
+│  │ (Rust PTY)  │ │ Registry   │ │ (NDJSON over stdio)  │ │
 │  └─────────────┘ └────────────┘ └──────────────────────┘ │
 │  ┌─────────────┐ ┌────────────┐ ┌──────────────────────┐ │
-│  │ FS / Git    │ │ VM Sandbox │ │ Custom Protocols     │ │
-│  │ Watchers    │ │            │ │ (aide-plugin/cdn)    │ │
+│  │ FS Watcher  │ │ VM Sandbox │ │ Custom Protocols     │ │
+│  │(Rust notify)│ │            │ │ (aide-plugin/cdn)    │ │
 │  └─────────────┘ └────────────┘ └──────────────────────┘ │
 └──────────────────────────────────────────────────────────┘
+  Backend ops (FS, watcher, PTY) route through
+  crates/aide-core + crates/aide-napi → .node loaded by Main process.
 ```
 
 ### Security boundaries
@@ -192,6 +217,12 @@ AIDE follows Electron's three-process model with strict security boundaries.
 - CDN assets are proxied through `aide-cdn://` with a hostname allowlist and on-disk cache
 - Plugin VM sandboxes have an explicit `require()` shim that only allows `path` and a permission-gated `fs`
 
+<p align="center">
+  <img src="docs/assets/screenshot-file-explorer.png" alt="File explorer + markdown preview side by side" />
+  <br/>
+  <sub><em>File explorer, terminal, and Markdown rendering in adjacent panes — navigate and edit project docs without leaving the IDE.</em></sub>
+</p>
+
 ---
 
 ## Tech Stack
@@ -201,7 +232,8 @@ AIDE follows Electron's three-process model with strict security boundaries.
 | **Shell** | Electron + electron-forge (Vite plugin) |
 | **UI** | React 19, TypeScript 5, Tailwind CSS 3 |
 | **State** | Zustand 5 |
-| **Terminal** | xterm.js + node-pty |
+| **Terminal** | xterm.js + Rust portable-pty (napi-rs) |
+| **Rust core** | napi-rs (crates/aide-core, crates/aide-napi) — FS, watcher, PTY |
 | **Persistence** | electron-store (per-workspace sessions) |
 | **Plugin sandbox** | Node.js `vm` module with scoped `require` |
 | **Custom protocols** | `aide-plugin://`, `aide-cdn://` |
@@ -213,11 +245,11 @@ AIDE follows Electron's three-process model with strict security boundaries.
 
 ## MCP Integration
 
-AIDE ships with an embedded **Model Context Protocol** server that exposes plugin tools to any MCP-aware agent.
+smalti ships with an embedded **Model Context Protocol** server that exposes plugin tools to any MCP-aware agent.
 
 ### What the MCP server does
 
-When AIDE starts, it writes a self-contained MCP server script to `~/.aide/aide-mcp-server.js` and registers it in each agent's global config:
+When smalti starts, it writes a self-contained MCP server script to `~/.aide/aide-mcp-server.js` and registers it in each agent's global config. The MCP server remains Node.js-hosted because it executes plugin JavaScript via `node:vm`.
 
 | Agent | Config file | Format |
 |---|---|---|
@@ -241,7 +273,7 @@ The server runs as a standalone Node process per agent invocation and speaks NDJ
 
 Every plugin's declared `tools` are automatically exposed under the namespace `plugin_<plugin-name>_<tool-name>`. When you create a plugin called `json-formatter` with a `format` tool, the agent immediately gets a callable tool named `plugin_json-formatter_format` — no restart needed.
 
-### Plugin → AIDE → Plugin call chain
+### Plugin → smalti → Plugin call chain
 
 ```
 User → Agent: "Format this JSON file"
@@ -263,4 +295,4 @@ See [LICENSE](./LICENSE).
 
 ## Contributing
 
-Issues and PRs welcome at [github.com/Achelous1/aide](https://github.com/Achelous1/aide).
+Issues and PRs welcome at [github.com/Achelous1/smalti](https://github.com/Achelous1/smalti).

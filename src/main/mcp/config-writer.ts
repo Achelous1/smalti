@@ -1,5 +1,5 @@
 /**
- * Writes the AIDE MCP server script and config to userData at startup.
+ * Writes the Smalti MCP server script and config to userData at startup.
  * The server runs as a standalone Node.js process — agents connect via --mcp-config.
  */
 import { app } from 'electron';
@@ -51,13 +51,13 @@ export function getMcpConfigPath(): string {
 }
 
 export function getMcpServerPath(): string {
-  // Use ~/.aide/ instead of userData — userData path contains "Application Support"
+  // Use ~/.smalti/ instead of userData — userData path contains "Application Support"
   // which has a space that Claude Code CLI mishandles when spawning the MCP process.
-  return path.join(getHome(), '.aide', 'aide-mcp-server.js');
+  return path.join(getHome(), '.smalti', 'smalti-mcp-server.js');
 }
 
 /**
- * Shared helper: merges the AIDE MCP server entry into a JSON config file.
+ * Shared helper: merges the Smalti MCP server entry into a JSON config file.
  * Safe to call multiple times — merges rather than overwrites.
  */
 function registerJsonMcpConfig(configPath: string, nodePath: string, serverPath: string): void {
@@ -132,7 +132,7 @@ export function writeMcpConfig(workspacePath: string): string {
 
   // Claude is launched with --mcp-config <path>, so ANY other config source
   // that lists "aide" causes Claude to spawn the MCP server once per source.
-  // Strip legacy entries older versions of AIDE wrote:
+  // Strip legacy entries older versions of smalti wrote:
   //   1. ~/.claude.json (global Claude config)
   //   2. ~/.mcp.json    (HOME-level .mcp.json; Claude auto-discovers it by
   //                      walking up from cwd, and every workspace is under HOME,
@@ -141,19 +141,19 @@ export function writeMcpConfig(workspacePath: string): string {
   try {
     unregisterAideFromJsonConfig(path.join(home, '.claude.json'));
   } catch (err) {
-    console.warn('[AIDE] Failed to clean legacy Claude MCP entry:', (err as Error).message);
+    console.warn('[smalti] Failed to clean legacy Claude MCP entry:', (err as Error).message);
   }
   try {
     unregisterAideFromJsonConfig(path.join(home, '.mcp.json'));
   } catch (err) {
-    console.warn('[AIDE] Failed to clean legacy ~/.mcp.json entry:', (err as Error).message);
+    console.warn('[smalti] Failed to clean legacy ~/.mcp.json entry:', (err as Error).message);
   }
 
   // Register in ~/.gemini/settings.json (Gemini has no --mcp-config flag)
   try {
     registerJsonMcpConfig(path.join(home, '.gemini', 'settings.json'), nodePath, serverPath);
   } catch (err) {
-    console.warn('[AIDE] Failed to register Gemini MCP config:', (err as Error).message);
+    console.warn('[smalti] Failed to register Gemini MCP config:', (err as Error).message);
   }
 
   // Register in ~/.codex/config.toml (Codex has no --mcp-config flag)
@@ -166,7 +166,7 @@ export function writeMcpConfig(workspacePath: string): string {
     const block = `[mcp_servers.aide]\ncommand = ${JSON.stringify(nodePath)}\nargs = [${JSON.stringify(serverPath)}]\n`;
     fs.writeFileSync(codexConfigPath, prefix.length > 0 ? `${prefix}\n\n${block}` : block);
   } catch (err) {
-    console.warn('[AIDE] Failed to register Codex MCP config:', (err as Error).message);
+    console.warn('[smalti] Failed to register Codex MCP config:', (err as Error).message);
   }
 
   const config = {
@@ -175,7 +175,7 @@ export function writeMcpConfig(workspacePath: string): string {
         command: 'node',
         args: [getMcpServerPath()],
         env: {
-          AIDE_WORKSPACE: workspacePath,
+          SMALTI_WORKSPACE: workspacePath,
         },
       },
     },

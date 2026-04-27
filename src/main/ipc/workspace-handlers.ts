@@ -47,8 +47,8 @@ function nextColor(counter: number): string {
 }
 
 /**
- * Migration: remove AIDE-generated entries from {workspace}/.mcp.json.
- * If only AIDE entries remain, delete the file entirely.
+ * Migration: remove smalti-generated entries from {workspace}/.mcp.json.
+ * If only smalti entries remain, delete the file entirely.
  */
 export function migrateProjectMcpJson(workspacePath: string): void {
   const mcpPath = nodePath.join(workspacePath, '.mcp.json');
@@ -66,15 +66,15 @@ export function migrateProjectMcpJson(workspacePath: string): void {
       const topKeys = Object.keys(config).filter((k) => k !== 'mcpServers');
       if (topKeys.length === 0) {
         fs.unlinkSync(mcpPath);
-        console.log('[AIDE] Removed legacy .mcp.json (AIDE-only)');
+        console.log('[smalti] Removed legacy .mcp.json (smalti-only)');
       } else {
         delete config.mcpServers;
         fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2));
-        console.log('[AIDE] Removed aide entry and empty mcpServers from .mcp.json');
+        console.log('[smalti] Removed aide entry and empty mcpServers from .mcp.json');
       }
     } else {
       fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2));
-      console.log('[AIDE] Removed aide entry from .mcp.json (other servers preserved)');
+      console.log('[smalti] Removed aide entry from .mcp.json (other servers preserved)');
     }
   } catch {
     // Corrupt or unreadable — leave it alone
@@ -106,7 +106,7 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     // and config-writer (writeMcpConfig). No eager mkdir here — prevents EPERM
     // from aborting the IPC handler when the workspace path is permission-restricted.
     try { writeMcpConfig(path); } catch (err) {
-      console.warn('[AIDE] Failed to write workspace MCP config:', (err as Error).message);
+      console.warn('[smalti] Failed to write workspace MCP config:', (err as Error).message);
     }
     return workspace;
   });
@@ -119,14 +119,14 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
       workspace.lastOpened = Date.now();
       setWorkspaces(workspaces);
     }
-    // Migrate legacy .mcp.json (remove AIDE entries from project root)
+    // Migrate legacy .mcp.json (remove smalti entries from project root)
     migrateProjectMcpJson(path);
     // .aide/plugins creation is delegated (see WORKSPACE_CREATE comment).
     try { writeMcpConfig(path); } catch (err) {
-      console.warn('[AIDE] Failed to write workspace MCP config:', (err as Error).message);
+      console.warn('[smalti] Failed to write workspace MCP config:', (err as Error).message);
     }
     try { setWorkspaceWatcher(path); } catch (err) {
-      console.warn('[AIDE] Failed to set workspace watcher:', (err as Error).message);
+      console.warn('[smalti] Failed to set workspace watcher:', (err as Error).message);
     }
     return activeWorkspacePath;
   });
@@ -187,7 +187,7 @@ export function registerWorkspaceHandlers(ipcMain: IpcMain): void {
     workspaces.push(workspace);
     setWorkspaces(workspaces);
     try { writeMcpConfig(projectPath); } catch (err) {
-      console.warn('[AIDE] Failed to write workspace MCP config:', (err as Error).message);
+      console.warn('[smalti] Failed to write workspace MCP config:', (err as Error).message);
     }
     return workspace;
   });

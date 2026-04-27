@@ -1,4 +1,4 @@
-# AIDE UI Functional Specification
+# smalti UI Functional Specification
 
 디자인 시스템(design.pen)에 정의된 UI 컴포넌트의 기능 명세서.
 개발 시 각 컴포넌트의 동작, 상태, 인터랙션을 참조한다.
@@ -96,9 +96,9 @@
 | `Open in Terminal` | 해당 프로젝트로 전환 (Terminal Page) |
 | `Show in Finder / Explorer` | OS 파일 탐색기에서 경로 열기 |
 | Divider | — |
-| `Remove from Workspace` | AIDE 워크스페이스 목록에서 제거 (로컬 파일 유지). 확인 불필요. 현재 열려 있던 경우 Welcome Page로 이동. |
+| `Remove from Workspace` | smalti 워크스페이스 목록에서 제거 (로컬 파일 유지). 확인 불필요. 현재 열려 있던 경우 Welcome Page로 이동. |
 
-> **Note**: AIDE는 프로젝트 폴더를 직접 삭제하는 기능을 제공하지 않음. 파일 삭제는 OS 파일 탐색기에서 수행.
+> **Note**: smalti는 프로젝트 폴더를 직접 삭제하는 기능을 제공하지 않음. 파일 삭제는 OS 파일 탐색기에서 수행.
 
 ### 2.4 Hero Section
 
@@ -300,7 +300,7 @@ PRD F7 자동 업데이트 알림 컴포넌트. **WorkspaceNav 가장 하단 —
 1. `setDownloading(true)` → 버튼 비활성, 라벨 변경
 2. `await window.aide.updater.download()` 호출
 3. Main process가 GitHub asset (`browser_download_url`)에서 DMG fetch
-4. `~/Downloads/AIDE-<tag>.dmg` 저장
+4. `~/Downloads/smalti-<tag>.dmg` 저장
 5. `shell.showItemInFolder(path)` → Finder가 다운로드 폴더 자동 오픈
 6. 성공/실패에 따라 `idle` 또는 `error` 상태로 복귀
 
@@ -369,14 +369,14 @@ PRD F7 자동 업데이트 알림 컴포넌트. **WorkspaceNav 가장 하단 —
 
 | Code | Description |
 |------|-------------|
-| `EPERM` | `AIDE needs permission to read this folder. Open Settings to grant access.` |
+| `EPERM` | `smalti needs permission to read this folder. Open Settings to grant access.` |
 | `ENOENT` | `Folder no longer exists: {path basename}` |
 | `ENOTDIR` | `Path is not a directory: {path basename}` |
 | `UNKNOWN` | `Failed to read folder: {message}` |
 
 **자동 재시도**:
 - 에러 코드가 `EPERM`일 때, window `focus` 이벤트 수신 시 자동으로 `loadTree`를 재호출한다
-- 사용자가 System Settings에서 권한을 부여하고 AIDE로 돌아오면 즉시 트리가 복구된다
+- 사용자가 System Settings에서 권한을 부여하고 smalti로 돌아오면 즉시 트리가 복구된다
 
 **플랫폼 가드**:
 - Linux/Windows에서는 `Open Settings` 버튼 비표시, `Retry`만 노출
@@ -784,3 +784,71 @@ spawn → Processing
 'fs:readTreeWithError'  // 에러 정보 포함 트리 조회 — { nodes, error? }
 'system:openPrivacySettings' // macOS Privacy & Security 패널 열기 (deep link)
 ```
+
+---
+
+## 13. Theme System (smalti Palette C — Hacker-Byzantine Hybrid)
+
+리브랜드 이후의 product-UI 색 시스템. 자세한 토큰 매핑·마이그레이션 이력·가드 테스트는
+[[../wiki/smalti-palette-c-theme]] 참조. 이 섹션은 컴포넌트 명세에서 색을 인용할 때
+바라봐야 하는 표준 토큰 표를 제공한다.
+
+### 13.1 Token mapping — design.pen ↔ Tailwind class
+
+| 역할 | Dark | Light | 권장 className |
+|------|------|-------|----------------|
+| Canvas (전체 bg) | `#0A0B10` | `#F5F5F0` | `bg-aide-background` |
+| Surface (사이드바·터미널 pane) | `#11131B` | `#EAEAE4` | `bg-aide-surface` |
+| Raised (StatusBar·카드·hover) | `#1B1E2A` | `#DEDED6` | `bg-aide-surface-elevated` |
+| Divider / 1px border | `#2A2E3D` | `#C8C8BE` | `border-aide-border` |
+| Body text | `#E6E7ED` | `#11131B` | `text-aide-text-primary` |
+| Muted text | `#9BA0B0` | `#5A5F6E` | `text-aide-text-secondary` |
+| **Glass Cyan — primary action** | `#4FB3BF` | `#2B8A94` | `text-aide-accent` / `bg-aide-accent` |
+| **Antique Gold — point accent (~1%)** | `#C9A24B` | `#A8802A` | `text-aide-accent-warning` |
+| Sky Blue — info / brand asset | `#6FC5DB` | `#4A9FB8` | `text-aide-accent-info` |
+| Crimson — error / critical | `#F10C45` | `#C8083A` | `text-smalti-crimson` |
+
+### 13.2 Token usage rules
+
+- **Glass Cyan는 primary action 전용**. CTA 버튼·active 표시·링크. Sky Blue는 브랜드
+  자산(로고·marketing) 전용으로 분리하며 CTA에 쓰지 않는다 (B05 결정 — `_workspace/04_visual_identity.md` §3.3).
+- **Gold 사용은 화면 면적의 ~1% 이하**. 활성 탭 상단 1px, 상태바 에이전트 라벨, 히어로 강조 등.
+  버튼 배경으로 쓰지 않는다.
+- **Crimson은 error / destructive / critical 전용**. 일반 강조색이 아니다.
+- **터미널 pane은 Surface 톤**. 다크·라이트 모두 surface (#11131B / #EAEAE4)로 일관 처리.
+  과거 "라이트 모드에서도 터미널만 다크" 예외는 폐기됨.
+- **Active 행 표시는 3-layer**. 3px Cyan accent bar (좌측) + 10% Cyan tint 배경 + 2px Gold
+  avatar ring. WorkspaceNav active 상태가 표준 구현(이슈 #108).
+
+### 13.3 두 층 토큰 시스템
+
+`aide-*` Tailwind 토큰(레거시 컴포넌트 호환)과 `smalti-*` 토큰(opacity modifier 지원, 신규
+컴포넌트 권장)이 공존한다. 두 층 모두 `src/renderer/styles/global.css`의 동일 CSS 변수를 참조한다.
+
+| 상황 | 사용 토큰 |
+|------|----------|
+| 기존 컴포넌트, opacity modifier 불필요 | `aide-*` (한 줄 변경) |
+| 신규 컴포넌트 / `bg-smalti-cyan/10` 같은 alpha 필요 | `smalti-*` |
+| 브랜드 자산 raw HEX (로고·마케팅) | theme-static `smalti-ink-*` / `smalti-black` |
+
+### 13.4 StatusBar 명세 (예시 — design.pen sbComp `7Z2Vk`)
+
+| 영역 | 클래스 / 값 |
+|------|------------|
+| 배경 | `bg-aide-surface-elevated` (`#1B1E2A` dark / `#DEDED6` light) |
+| 본문 텍스트 | `text-aide-text-primary text-[11px] font-mono` |
+| 좌측: 플러그인 카운트 | `[N] plugins active` — count=0이어도 항상 표시 |
+| 우측: 에이전트 라벨 | `text-aide-accent-warning font-bold` (Gold) |
+| 상단 1px 보더 | `border-t border-aide-border` |
+| 높이 | 24px |
+
+### 13.5 가드 테스트
+
+브랜드·테마 회귀를 막는 테스트가 `tests/unit/brand-*.test.ts`에 정의되어 있다. 색·텍스트 변경 시
+다음을 통과해야 한다.
+
+- `brand-tokens.test.ts` — Tailwind 토큰 스키마 (37 assertions)
+- `brand-renderer-strings.test.ts` — Hero / TitleBar / 에러 메시지 user-visible 문자열
+- `brand-palette-decision.test.ts` — Glass Cyan vs Sky Blue 분리 규칙
+- `brand-claude-md.test.ts` / `brand-readme.test.ts` / `brand-spec-docs.test.ts` /
+  `brand-wiki.test.ts` — 문서 산문 drift

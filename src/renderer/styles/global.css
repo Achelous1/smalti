@@ -10,49 +10,85 @@
 }
 
 :root {
-  --background: #131519;
-  --surface: #1A1C23;
-  --surface-elevated: #24262E;
-  --surface-sidebar: #181A21;
-  --border: #2E3140;
-  --terminal-bg: #0F1117;
-  --terminal-text: #CDD1E0;
-  --text-primary: #E8E9ED;
-  --text-secondary: #8B8D98;
-  --text-tertiary: #5C5E6A;
-  --accent: #10B981;
-  --accent-warning: #F59E0B;
-  --accent-info: #06B6D4;
-  --agent-claude: #D97706;
-  --agent-gemini: #3B82F6;
-  --agent-codex: #10B981;
-  --tab-active-bg: #131519;
-  --tab-inactive-bg: #1A1C23;
+  /* Legacy aide-* tokens now alias to smalti palette C (Hacker-Byzantine Hybrid).
+     Touching the values here re-skins every existing component class
+     (text-aide-*, bg-aide-*, border-aide-*) without renaming consumers. */
+  --background: #0A0B10;          /* smalti-canvas dark */
+  --surface: #11131B;              /* smalti-surface dark */
+  --surface-elevated: #1B1E2A;     /* smalti-raised dark */
+  --surface-sidebar: #11131B;      /* smalti-surface dark */
+  --border: #2A2E3D;               /* smalti-divider dark */
+  --terminal-bg: #11131B;          /* smalti-surface dark — terminal as surface tone */
+  --terminal-text: #E6E7ED;        /* smalti-ink-body dark */
+  --text-primary: #E6E7ED;         /* smalti-ink-body dark */
+  --text-secondary: #9BA0B0;       /* smalti-ink-muted dark */
+  --text-tertiary: #5A5F6E;        /* dimmed muted */
+  --accent: #4FB3BF;               /* smalti-cyan dark — primary action */
+  --accent-warning: #C9A24B;       /* smalti-gold dark */
+  --accent-info: #6FC5DB;          /* smalti-sky-blue dark */
+  --agent-claude: #C9A24B;         /* gold for Claude */
+  --agent-gemini: #6FC5DB;         /* sky-blue for Gemini */
+  --agent-codex: #4FB3BF;          /* cyan for Codex */
+  --tab-active-bg: #0A0B10;        /* smalti-canvas dark */
+  --tab-inactive-bg: #11131B;      /* smalti-surface dark */
   --scrollbar-thumb: rgba(255, 255, 255, 0.08);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.16);
+  /* smalti semantic tokens — dark (default) — RGB triplets for Tailwind opacity modifier support */
+  --smalti-canvas: 10 11 16;
+  --smalti-surface: 17 19 27;
+  --smalti-raised: 27 30 42;
+  --smalti-divider: 42 46 61;
+  --smalti-ink-body: 230 231 237;
+  --smalti-ink-muted: 155 160 176;
+  --smalti-cyan: 79 179 191;
+  --smalti-gold: 201 162 75;
+  --smalti-crimson: 241 12 69;
+  --smalti-sky-blue: 111 197 219;
+  /* status semantic tokens — dark */
+  --status-success: #4FB3BF;   /* smalti-cyan — 성공/완료 */
+  --status-warning: #C9A24B;   /* smalti-gold — 경고 */
+  --status-error:   #F10C45;   /* smalti-crimson — 에러/critical */
+  --status-info:    #6FC5DB;   /* smalti-sky-blue — 정보 */
 }
 
 .light {
-  --background: #F5F5F0;
-  --surface: #FAFAF7;
-  --surface-elevated: #EBEBE6;
-  --surface-sidebar: #EFEFEA;
-  --border: #E0E3E8;
-  --terminal-bg: #FAFAF7;
-  --terminal-text: #374151;
-  --text-primary: #0D0D0D;
-  --text-secondary: #6B7280;
-  --text-tertiary: #9CA3AF;
-  --accent: #059669;
-  --accent-warning: #D97706;
-  --accent-info: #0891B2;
-  --agent-claude: #D97706;
-  --agent-gemini: #3B82F6;
-  --agent-codex: #10B981;
+  /* Legacy aide-* tokens — light variant aliased to smalti palette C light values. */
+  --background: #F5F5F0;           /* smalti-canvas light */
+  --surface: #EAEAE4;              /* smalti-surface light */
+  --surface-elevated: #DEDED6;     /* smalti-raised light */
+  --surface-sidebar: #EAEAE4;      /* smalti-surface light */
+  --border: #C8C8BE;               /* smalti-divider light */
+  --terminal-bg: #EAEAE4;          /* smalti-surface light */
+  --terminal-text: #11131B;        /* smalti-ink-body light */
+  --text-primary: #11131B;         /* smalti-ink-body light */
+  --text-secondary: #5A5F6E;       /* smalti-ink-muted light */
+  --text-tertiary: #9BA0B0;        /* dimmed muted */
+  --accent: #2B8A94;               /* smalti-cyan light — primary action */
+  --accent-warning: #A8802A;       /* smalti-gold light */
+  --accent-info: #4A9FB8;          /* smalti-sky-blue light */
+  --agent-claude: #A8802A;
+  --agent-gemini: #4A9FB8;
+  --agent-codex: #2B8A94;
   --tab-active-bg: #F5F5F0;
-  --tab-inactive-bg: #E8E8E3;
+  --tab-inactive-bg: #EAEAE4;
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
+  /* smalti semantic tokens — light — RGB triplets for Tailwind opacity modifier support */
+  --smalti-canvas: 245 245 240;
+  --smalti-surface: 234 234 228;
+  --smalti-raised: 222 222 214;
+  --smalti-divider: 200 200 190;
+  --smalti-ink-body: 17 19 27;
+  --smalti-ink-muted: 90 95 110;
+  --smalti-cyan: 43 138 148;
+  --smalti-gold: 168 128 42;
+  --smalti-crimson: 200 8 58;
+  --smalti-sky-blue: 74 159 184;
+  /* status semantic tokens — light */
+  --status-success: #2B8A94;   /* smalti-cyan light — 성공/완료 */
+  --status-warning: #A8802A;   /* smalti-gold light — 경고 */
+  --status-error:   #C8083A;   /* smalti-crimson light — 에러/critical */
+  --status-info:    #4A9FB8;   /* smalti-sky-blue light — 정보 */
 }
 
 html, body, #root {
@@ -151,20 +187,20 @@ body {
  * Drag interaction visual feedback
  * ============================================================ */
 
-/* Insert position indicator — 2px blue vertical line between tabs */
+/* Insert position indicator — 2px cyan vertical line between tabs */
 .drag-insert-line {
   position: absolute;
   left: 0;
   top: 4px;
   bottom: 4px;
   width: 2px;
-  background-color: #3B82F6;
+  background-color: var(--accent);
   border-radius: 1px;
   pointer-events: none;
   z-index: 20;
 }
 
-/* Cross-pane drop overlay — blue tint + centered label */
+/* Cross-pane drop overlay — cyan tint + centered label */
 .drag-drop-overlay {
   position: absolute;
   inset: 0;
@@ -172,15 +208,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(59, 130, 246, 0.10);
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  background-color: rgb(var(--smalti-cyan) / 0.10);
+  border: 1px solid rgb(var(--smalti-cyan) / 0.35);
   pointer-events: none;
 }
 
 .drag-drop-overlay__text {
   font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   font-size: 12px;
-  color: #3B82F6;
+  color: var(--accent);
   opacity: 0.9;
 }
 
@@ -199,7 +235,7 @@ button:focus-visible .drag-handle-icon {
   opacity: 1;
 }
 
-/* Resize divider — 4px blue highlight on hover and active drag */
+/* Resize divider — 4px cyan highlight on hover and active drag */
 .resize-divider {
   background-color: var(--border);
   transition: background-color 150ms ease-out;
@@ -207,7 +243,7 @@ button:focus-visible .drag-handle-icon {
 
 .resize-divider:hover,
 .resize-divider--active {
-  background-color: #3B82F6;
+  background-color: var(--accent);
 }
 
 /* Expand visual width/height to 4px via ::before pseudo-element */
@@ -234,7 +270,7 @@ button:focus-visible .drag-handle-icon {
 
 .resize-divider:hover::before,
 .resize-divider--active::before {
-  background-color: #3B82F6;
+  background-color: var(--accent);
 }
 
 /* Direction icon on resize divider */
@@ -242,7 +278,7 @@ button:focus-visible .drag-handle-icon {
   position: absolute;
   z-index: 15;
   font-size: 10px;
-  color: #3B82F6;
+  color: var(--accent);
   opacity: 0;
   transition: opacity 150ms ease-out;
   pointer-events: none;
