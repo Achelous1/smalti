@@ -1,6 +1,81 @@
-import { useEffect, useState } from 'react';
-import { usePluginStore } from '../../stores/plugin-store';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePluginStore, type PublishConflict } from '../../stores/plugin-store';
 import { useLayoutStore } from '../../stores/layout-store';
+import type { PluginInfo } from '../../../types/ipc';
+import type { SyncStatus } from '../../../types/plugin-registry';
+import { PluginStatusBadge } from './registry/PluginStatusBadge';
+import { RegistryBrowser } from './registry/RegistryBrowser';
+import { ForkAsNewPluginDialog } from './registry/dialogs/ForkAsNewPluginDialog';
+import { UpdateConfirmDialog } from './registry/dialogs/UpdateConfirmDialog';
+import { PublishConflictDialog } from './registry/dialogs/PublishConflictDialog';
+
+const PluginIconStub = () => (
+  <div className="grid grid-cols-2 grid-rows-2 gap-0.5 shrink-0" style={{ width: 22, height: 22 }}>
+    <span className="bg-smalti-cyan rounded-[2px]" />
+    <span className="bg-aide-text-tertiary/50 rounded-[2px]" />
+    <span className="bg-aide-text-tertiary/50 rounded-[2px]" />
+    <span className="bg-smalti-gold rounded-[2px]" />
+  </div>
+);
+
+interface ActionMenuItem {
+  key: string;
+  label: string;
+  danger?: boolean;
+  onSelect: () => void;
+}
+
+function ActionMenu({
+  items,
+  onClose,
+}: {
+  items: ActionMenuItem[];
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      data-testid="plugin-action-menu"
+      className="absolute right-0 top-6 z-20 bg-aide-surface-elevated border border-aide-border rounded-md shadow-xl py-1 min-w-[180px]"
+    >
+      {items.map((item) => (
+        <button
+          key={item.key}
+          role="menuitem"
+          onClick={() => {
+            item.onSelect();
+            onClose();
+          }}
+          className={`w-full text-left px-3 py-1.5 text-xs font-mono transition-colors ${
+            item.danger
+              ? 'text-smalti-crimson hover:bg-smalti-crimson/10'
+              : 'text-aide-text-primary hover:bg-aide-surface'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function PluginPanel() {
   const {
@@ -9,20 +84,56 @@ export function PluginPanel() {
     error,
     loadPlugins,
     activate,
-    deactivate,
     deletePlugin,
+    generate,
+    generating,
+    generateError,
+    registryDiffs,
+    refreshRegistryDiffs,
+    applyUpdate,
+    forkAsNew,
+    publish,
+    importFromRegistry,
   } = usePluginStore();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [forkTarget, setForkTarget] = useState<PluginInfo | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<PluginInfo | null>(null);
+  const [publishConflict, setPublishConflict] =
+    useState<{ plugin: PluginInfo; conflict: PublishConflict } | null>(null);
+  const [genName, setGenName] = useState('');
+  const [genDesc, setGenDesc] = useState('');
 
   useEffect(() => {
     loadPlugins();
-    const unsub = window.aide.plugin.onChanged(loadPlugins);
+    const unsub = window.aide.plugin.onChanged(() => {
+      loadPlugins();
+      refreshRegistryDiffs();
+    });
     return unsub;
-  }, [loadPlugins]);
+  }, [loadPlugins, refreshRegistryDiffs]);
 
-  const handleOpenTab = async (plugin: typeof plugins[number]) => {
-    // Focus existing tab if already open
+  const installedNames = useMemo(
+    () => new Set(plugins.map((p) => p.name)),
+    [plugins]
+  );
+
+  const updateAvailableIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const diff of Object.values(registryDiffs)) {
+      if (diff && diff.status === 'update-available') set.add(diff.registryId);
+    }
+    return set;
+  }, [registryDiffs]);
+
+  const statusFor = (plugin: PluginInfo): SyncStatus => {
+    const diff = registryDiffs[plugin.name];
+    return diff?.status ?? 'unknown';
+  };
+
+  const handleOpenTab = async (plugin: PluginInfo) => {
     const allPanes = useLayoutStore.getState().getAllPanes();
     const existing = allPanes
       .flatMap((pane) => pane.tabs.map((tab) => ({ paneId: pane.id, tab })))
@@ -31,97 +142,210 @@ export function PluginPanel() {
       useLayoutStore.getState().setActiveTab(existing.paneId, existing.tab.id);
       return;
     }
-    // Smart Open: activate (also adds tab via plugin-store.activate) regardless of current state.
-    // activate() is idempotent on already-active plugins and skips tab creation if tab exists.
     await activate(plugin.id);
   };
 
-  const handleDeleteClick = (name: string) => {
-    setDeleteConfirm(name);
+  const handleUpdateClick = async (plugin: PluginInfo) => {
+    const diff = registryDiffs[plugin.name];
+    // If the workspace has local modifications, show confirm dialog first.
+    if (diff && diff.status === 'locally-modified') {
+      setUpdateTarget(plugin);
+      return;
+    }
+    try {
+      await applyUpdate(plugin.name);
+    } catch (e) {
+      console.error('Update failed', e);
+    }
+  };
+
+  const handlePublishClick = async (plugin: PluginInfo) => {
+    try {
+      const conflict = await publish(plugin.name, true);
+      if (conflict && conflict.reason === 'pull-latest-first') {
+        setPublishConflict({ plugin, conflict });
+      }
+    } catch (e) {
+      console.error('Publish failed', e);
+    }
+  };
+
+  const buildActionItems = (plugin: PluginInfo): ActionMenuItem[] => {
+    const status = statusFor(plugin);
+    const diff = registryDiffs[plugin.name];
+    const items: ActionMenuItem[] = [];
+
+    if (status === 'update-available') {
+      items.push({
+        key: 'update',
+        label: diff?.latestVersion ? `Update to ${diff.latestVersion}` : 'Update',
+        onSelect: () => handleUpdateClick(plugin),
+      });
+      items.push({
+        key: 'fork',
+        label: 'Fork as new plugin',
+        onSelect: () => setForkTarget(plugin),
+      });
+    } else if (status === 'locally-modified') {
+      items.push({
+        key: 'update',
+        label: 'Update to latest (discard local)',
+        onSelect: () => handleUpdateClick(plugin),
+      });
+      items.push({
+        key: 'fork',
+        label: 'Fork as new plugin',
+        onSelect: () => setForkTarget(plugin),
+      });
+    }
+
+    items.push({
+      key: 'publish',
+      label:
+        status === 'locally-modified'
+          ? 'Publish to registry (bump patch)'
+          : 'Publish to registry',
+      onSelect: () => handlePublishClick(plugin),
+    });
+
+    items.push({
+      key: 'remove',
+      label: 'Remove',
+      danger: true,
+      onSelect: () => setDeleteConfirm(plugin.name),
+    });
+
+    return items;
   };
 
   const handleDeleteConfirm = async () => {
     if (!deleteConfirm) return;
-    await deletePlugin(deleteConfirm);
-    setDeleteConfirm(null);
+    const target = plugins.find((p) => p.name === deleteConfirm);
+    const diff = target ? registryDiffs[target.name] : null;
+    try {
+      await deletePlugin(deleteConfirm);
+      // Best-effort: also remove from registry if we can identify the source id.
+      if (diff?.registryId) {
+        try {
+          await window.aide.plugin.registry.remove(diff.registryId);
+        } catch {
+          /* registry remove failures are non-fatal */
+        }
+      }
+    } finally {
+      setDeleteConfirm(null);
+    }
   };
 
-  const activeCount = plugins.filter((p) => p.active).length;
+  const handleGenerate = async () => {
+    if (!genName.trim() || generating) return;
+    const result = await generate(genName.trim(), genDesc.trim());
+    if (result) {
+      setGenName('');
+      setGenDesc('');
+    }
+  };
 
-  const renderPlugin = (plugin: typeof plugins[number]) => (
-    <div
-      key={plugin.id}
-      className="flex items-start gap-2 px-2 py-2 rounded bg-aide-surface-elevated"
-    >
-      <div className="flex flex-col flex-1 min-w-0">
-        <span className="text-xs font-mono text-aide-text-primary truncate">
-          {plugin.name}
-        </span>
-        {plugin.description && (
-          <span className="text-[10px] text-aide-text-secondary truncate">
-            {plugin.description}
-          </span>
-        )}
-        <span className="text-[10px] text-aide-text-tertiary">
-          v{plugin.version}
-        </span>
-      </div>
-      <div className="flex items-center gap-1 shrink-0 pt-0.5">
-        <button
-          onClick={() =>
-            plugin.active ? deactivate(plugin.id) : activate(plugin.id)
-          }
-          className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
-            plugin.active
-              ? 'border border-aide-accent text-aide-accent'
-              : 'border border-aide-border text-aide-text-secondary hover:text-aide-text-primary hover:border-aide-text-secondary'
-          }`}
-          title={plugin.active ? 'Deactivate plugin' : 'Activate plugin'}
-        >
-          {plugin.active ? 'ON' : 'OFF'}
-        </button>
-        <button
-          onClick={() => window.aide.plugin.reload(plugin.id)}
-          className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aide-text-tertiary hover:text-aide-text-primary hover:bg-aide-surface-elevated transition-colors"
-          title="Reload plugin"
-        >
-          ↻
-        </button>
+  const renderPlugin = (plugin: PluginInfo) => {
+    const status = statusFor(plugin);
+    const diff = registryDiffs[plugin.name];
+    return (
+      <div
+        key={plugin.id}
+        data-testid={`plugin-row-${plugin.id}`}
+        className="relative flex items-start gap-2 px-2 py-2 rounded hover:bg-aide-surface-elevated transition-colors"
+      >
+        <PluginIconStub />
         <button
           onClick={() => handleOpenTab(plugin)}
-          className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aide-text-tertiary hover:text-aide-text-primary hover:bg-aide-surface-elevated transition-colors"
-          title="Open plugin (will activate if off)"
+          className="flex flex-col flex-1 min-w-0 text-left"
         >
-          ↗
+          <span className="text-sm font-mono text-aide-text-primary truncate">
+            {plugin.name}
+          </span>
+          {plugin.description && (
+            <span className="text-[11px] text-aide-text-secondary leading-snug line-clamp-2 font-sans">
+              {plugin.description}
+            </span>
+          )}
         </button>
-        <button
-          onClick={() => handleDeleteClick(plugin.name)}
-          className="px-1.5 py-0.5 rounded text-[10px] font-mono text-aide-text-tertiary hover:text-red-400 hover:bg-red-400/10 transition-colors"
-          title="Delete plugin"
-        >
-          ×
-        </button>
+        <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+          <PluginStatusBadge
+            status={status}
+            latestVersion={diff?.latestVersion ?? undefined}
+          />
+          <button
+            aria-label={`Plugin actions for ${plugin.name}`}
+            data-testid={`plugin-actions-${plugin.id}`}
+            onClick={() =>
+              setOpenMenuFor((cur) => (cur === plugin.id ? null : plugin.id))
+            }
+            className="text-aide-text-tertiary hover:text-aide-text-primary px-1 transition-colors"
+          >
+            ···
+          </button>
+          {openMenuFor === plugin.id && (
+            <ActionMenu
+              items={buildActionItems(plugin)}
+              onClose={() => setOpenMenuFor(null)}
+            />
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-3 py-2 shrink-0 border-b border-aide-border">
+      <div className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-aide-border">
         <span className="text-[10px] uppercase tracking-widest text-aide-text-tertiary font-mono">
-          Plugins {plugins.length > 0 ? `(${activeCount}/${plugins.length} active)` : ''}
+          Plugins
+        </span>
+        <span className="text-[10px] font-mono text-aide-text-secondary bg-aide-surface-elevated rounded px-1.5 py-0.5">
+          {plugins.length}
         </span>
       </div>
 
-      {/* Agent-driven plugin creation hint */}
-      <div className="px-3 py-2 shrink-0 border-b border-aide-border">
-        <p className="text-[10px] font-mono text-aide-text-secondary leading-relaxed">
-          Ask your AI agent in the terminal to create plugins.
-          <span className="text-aide-text-tertiary block mt-0.5">
-            e.g. &ldquo;Make a plugin that formats JSON files&rdquo;
-          </span>
-        </p>
+      {/* Add from registry button */}
+      <div className="px-3 py-2 shrink-0">
+        <button
+          onClick={() => setBrowserOpen(true)}
+          data-testid="add-from-registry"
+          className="w-full px-3 py-2 text-xs font-mono rounded bg-aide-accent text-aide-background hover:opacity-90 transition-opacity"
+        >
+          + Add from registry
+        </button>
+      </div>
+
+      {/* Generate plugin form */}
+      <div className="px-3 pb-2 shrink-0 flex flex-col gap-2 border-b border-aide-border">
+        <input
+          type="text"
+          value={genName}
+          onChange={(e) => setGenName(e.target.value)}
+          placeholder="plugin name"
+          aria-label="Plugin name"
+          className="w-full bg-aide-background border border-aide-border rounded px-2 py-1.5 text-xs font-mono text-aide-text-primary focus:outline-none focus:border-aide-accent"
+        />
+        <input
+          type="text"
+          value={genDesc}
+          onChange={(e) => setGenDesc(e.target.value)}
+          placeholder="describe what it does"
+          aria-label="Plugin description"
+          className="w-full bg-aide-background border border-aide-border rounded px-2 py-1.5 text-xs font-mono text-aide-text-primary focus:outline-none focus:border-aide-accent"
+        />
+        <button
+          onClick={handleGenerate}
+          disabled={!genName.trim() || generating}
+          className="w-full px-3 py-1.5 text-xs font-mono rounded border border-aide-accent text-aide-accent hover:bg-aide-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {generating ? 'Generating…' : '+ Generate plugin'}
+        </button>
+        {generateError && (
+          <span className="text-[10px] font-mono text-smalti-crimson">{generateError}</span>
+        )}
       </div>
 
       {/* Plugin list */}
@@ -133,13 +357,13 @@ export function PluginPanel() {
         )}
 
         {!loading && error && (
-          <div className="px-3 py-2 text-[10px] font-mono text-red-400">{error}</div>
+          <div className="px-3 py-2 text-[10px] font-mono text-smalti-crimson">{error}</div>
         )}
 
         {!loading && !error && plugins.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 gap-1 text-aide-text-tertiary text-xs font-mono">
             <span>No plugins installed</span>
-            <span className="text-[10px]">Ask an agent to create one</span>
+            <span className="text-[10px]">Use + Add from registry, or generate one</span>
           </div>
         )}
 
@@ -150,17 +374,17 @@ export function PluginPanel() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete confirmation */}
       {deleteConfirm && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-          <div className="bg-aide-surface-elevated border border-aide-border rounded-lg px-4 py-3 flex flex-col gap-3 max-w-[200px] w-full mx-3">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-30">
+          <div className="bg-aide-surface-elevated border border-aide-border rounded-lg px-4 py-3 flex flex-col gap-3 max-w-[240px] w-full mx-3">
             <span className="text-xs font-mono text-aide-text-primary">
               Delete &ldquo;{deleteConfirm}&rdquo;?
             </span>
             <div className="flex gap-2">
               <button
                 onClick={handleDeleteConfirm}
-                className="flex-1 px-2 py-1 text-[10px] font-mono bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                className="flex-1 px-2 py-1 text-[10px] font-mono bg-smalti-crimson text-white rounded hover:opacity-90 transition-opacity"
               >
                 Delete
               </button>
@@ -173,6 +397,74 @@ export function PluginPanel() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Registry browser modal */}
+      <RegistryBrowser
+        open={browserOpen}
+        onClose={() => setBrowserOpen(false)}
+        installedNames={installedNames}
+        updateAvailableIds={updateAvailableIds}
+        onImport={async (registryId) => {
+          try {
+            await importFromRegistry(registryId);
+          } catch (e) {
+            console.error('Import failed', e);
+          }
+        }}
+      />
+
+      {/* Fork dialog */}
+      {forkTarget && (
+        <ForkAsNewPluginDialog
+          open
+          onClose={() => setForkTarget(null)}
+          originalPluginName={forkTarget.name}
+          originalPluginId={forkTarget.id}
+          onConfirm={async (opts) => {
+            await forkAsNew(forkTarget.name, {
+              newName: opts.newName,
+              newDescription: opts.newDescription,
+              restoreOriginal: opts.restoreOriginal,
+            });
+          }}
+        />
+      )}
+
+      {/* Update confirm dialog */}
+      {updateTarget && (
+        <UpdateConfirmDialog
+          open
+          onClose={() => setUpdateTarget(null)}
+          pluginName={updateTarget.name}
+          latestVersion={registryDiffs[updateTarget.name]?.latestVersion ?? '?'}
+          modifiedFiles={[]}
+          onConfirm={async () => {
+            await applyUpdate(updateTarget.name);
+          }}
+          onForkInstead={() => {
+            const t = updateTarget;
+            setUpdateTarget(null);
+            setForkTarget(t);
+          }}
+        />
+      )}
+
+      {/* Publish conflict dialog */}
+      {publishConflict && (
+        <PublishConflictDialog
+          open
+          onClose={() => setPublishConflict(null)}
+          pluginName={publishConflict.plugin.name}
+          workspaceVersion={
+            publishConflict.conflict.workspaceVersion ??
+            publishConflict.plugin.version
+          }
+          registryVersion={publishConflict.conflict.registryVersion ?? '?'}
+          onPullLatest={async () => {
+            await applyUpdate(publishConflict.plugin.name);
+          }}
+        />
       )}
     </div>
   );
