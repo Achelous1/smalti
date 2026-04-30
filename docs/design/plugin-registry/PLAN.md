@@ -102,6 +102,38 @@
 - `index.json` 과 version 디렉토리 생성은 atomic rename(`fs.rename` of temp file) 으로 직렬화
 - publish 직전 한 번 더 글로벌 latest 재확인 후 위 규칙 적용
 
+### D7. MCP 편집 가드 (`aide_edit_plugin` 진입점)
+구조적 결정: UI 의 Update/Fork 다이얼로그는 사용자가 직접 클릭할 때만 트리거된다. 그러나 외부 에이전트(Claude Code 등)가 `mcp__aide__aide_edit_plugin` 으로 플러그인을 수정하면 이 가드를 우회해 silent locally-modified 를 만든다. MCP 경로에도 동일한 sync-first 원칙을 적용해야 한다.
+
+**`aide_edit_plugin` 의 새 동작**:
+1. 편집 대상 플러그인의 `source.registryId` 확인
+   - **없으면** (로컬 생성, 글로벌 push 전): 그대로 편집 적용. 종료.
+   - **있으면**: `registryGlobal.diff(id)` 호출 → 글로벌 최신 vs 워크스페이스 base 비교
+2. `synced` 또는 글로벌과 동일: 그대로 편집 적용 → 결과적으로 `locally-modified` 로 전환. MCP 응답에 다음 메타 포함:
+   ```json
+   {
+     "result": "ok",
+     "warning": "Plugin is now locally-modified. Future syncs will offer to overwrite or fork-as-new-plugin to preserve changes."
+   }
+   ```
+3. `update-available`: **편집 즉시 적용하지 않고** 메인 프로세스가 IPC 로 렌더러에 컨펌 다이얼로그 띄움 (신규 6번째 화면 — `MCPEditConflictDialog`):
+   - **타이틀**: "Newer version available — choose how to edit"
+   - **본문**: "{pluginName} has a newer version (X.Y.Z) in the registry. Editing now without updating means your changes will only survive as a new (forked) plugin."
+   - **3개 옵션**:
+     - **Update first, then edit** (권장 기본): 글로벌 최신 pull → MCP 호출자에게 "updated, please retry edit" 응답 (편집 자체는 적용 안 됨, 다음 호출에서 자연스럽게 처리)
+     - **Fork & edit**: 자동으로 D6 의 Fork-as-new-plugin 실행 (auto-derived name) → 새 플러그인 트리에 MCP 편집 적용 → 응답에 새 `pluginId` 반환. 원본은 upstream 으로 자동 복원.
+     - **Edit anyway**: 편집 즉시 적용. 결과는 `locally-modified` + `update-available` 동시 상태. 다음 sync 시 D3 의 경고 다이얼로그 트리거.
+4. 사용자가 다이얼로그를 닫지 않고 N 초(예: 30s) 대기 시 MCP 호출은 **차단된 상태로 유지**. 응답 timeout 은 MCP 호출자가 처리.
+5. 일관성: UI 의 Update/Fork 와 동일한 코드 경로(`registryGlobal.applyUpdate`, `registryGlobal.forkAsNew`) 호출. 새 헬퍼 추가 X.
+
+**핵심 메시지 (다이얼로그/MCP 응답 모두에 명시)**:
+- "Editing without updating preserves your changes only by forking into a new plugin (`pluginId` 가 새로 발급됨). 원본 entry 는 upstream 동기화 상태로 복원됩니다."
+- 이 문장이 사용자가 의도와 다른 결과를 만들지 않도록 가드 역할.
+
+**해당 흐름은 신규 6번째 화면 디자인 필요** — Phase 0 파일 목록에 `MCPEditConflictDialog.tsx` 추가, design.pen 에도 추가 mockup 필요.
+
+**보너스**: `aide_create_plugin` 도 같은 이름의 글로벌 entry 가 이미 존재하면(이름 충돌) 사용자에게 컨펌 — overwrite vs new-with-suffix vs cancel.
+
 ---
 
 ## Phase 0: UI 디자인 (pencil MCP)
@@ -116,6 +148,7 @@
    - **ForkAsNewPluginDialog**: 새 이름·설명 입력 + 원본 처리 라디오 ("그대로 유지" / "upstream 으로 복원")
    - **UpdateConfirmDialog**: locally-modified 동시 update 시 경고 ("로컬 변경이 사라집니다, 보존하려면 Fork")
    - **PublishConflictDialog**: 글로벌 latest > 워크스페이스 base 일 때 Pull-latest-first 안내
+   - **MCPEditConflictDialog** (D7): MCP `aide_edit_plugin` 진입 시 newer version 존재할 때 3옵션(Update first / Fork & edit / Edit anyway) 가드
 4. 디자인 컨펌 후 구현 단계로 진행
 
 ## 변경 대상 파일
@@ -128,6 +161,7 @@
 - `src/renderer/components/plugin/dialogs/ForkAsNewPluginDialog.tsx` — Fork 액션 입력(이름/설명/원본 처리 옵션)
 - `src/renderer/components/plugin/dialogs/UpdateConfirmDialog.tsx` — locally-modified 동시 update 시 경고
 - `src/renderer/components/plugin/dialogs/PublishConflictDialog.tsx` — Pull-latest-first 가드 안내
+- `src/renderer/components/plugin/dialogs/MCPEditConflictDialog.tsx` — MCP `aide_edit_plugin` 진입 시 newer version 존재할 때 3옵션 가드 (D7)
 
 ### 수정 파일
 - `src/main/ipc/channels.ts` — 신규 채널 추가:
