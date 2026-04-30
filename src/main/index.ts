@@ -19,6 +19,7 @@ import { writeMcpConfig, getMcpConfigPath, unregisterSmaltiFromJsonConfig } from
 import { registerCustomSchemes, registerPluginProtocol } from './plugin/protocol';
 import { registerCdnProtocol } from './plugin/cdn-protocol';
 import { getHome } from './utils/home';
+import { ensureRegistryRoot } from './plugin/registry-global';
 import { migrateAideToSmalti } from './migrate-aide-data';
 import { migrateAideUserData } from './migrate-aide-userdata';
 
@@ -146,6 +147,11 @@ app.on('ready', () => {
   }).catch((err) => {
     console.error('[smalti] userData migration failed (non-fatal):', err);
   });
+  try {
+    ensureRegistryRoot();
+  } catch (err) {
+    console.error('[smalti] failed to ensure registry root:', err);
+  }
   registerIpcHandlers();
   registerAppSettingsHandlers(ipcMain);
   registerWorkspaceHandlers(ipcMain);

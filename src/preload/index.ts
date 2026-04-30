@@ -124,6 +124,15 @@ const aideAPI: AideAPI = {
     },
     reload: (pluginId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_RELOAD, pluginId),
+    registry: {
+      list: () => ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_REGISTRY_LIST),
+      diff: (pluginName: string) => ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_REGISTRY_DIFF, pluginName),
+      pull: (registryId: string, version?: string, targetName?: string) =>
+        ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_REGISTRY_PULL, registryId, version, targetName),
+      push: (pluginName: string, opts?: { bumpPatch?: boolean }) =>
+        ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_REGISTRY_PUSH, pluginName, opts),
+      remove: (registryId: string) => ipcRenderer.invoke(IPC_CHANNELS.PLUGIN_REGISTRY_REMOVE, registryId),
+    },
   },
 
   mcp: {
