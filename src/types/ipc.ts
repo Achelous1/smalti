@@ -211,6 +211,9 @@ export interface UpdateInfo {
   htmlUrl: string | null;
 }
 
+import type { PluginSourceMeta, RegistrySummary, RegistryDiff } from './plugin-registry';
+export type { PluginSourceMeta, RegistrySummary, RegistryDiff };
+
 /** IPC API exposed to renderer via contextBridge */
 export interface AideAPI {
   fs: {
@@ -262,6 +265,13 @@ export interface AideAPI {
     onDataChanged(callback: () => void): () => void;
     onHtmlChanged(callback: (pluginName: string) => void): () => void;
     reload(pluginId: string): Promise<boolean>;
+    registry: {
+      list(): Promise<RegistrySummary[]>;
+      diff(pluginName: string): Promise<RegistryDiff | null>;
+      pull(registryId: string, version?: string, targetName?: string): Promise<{ ok: true; pluginPath: string; contentHash: string } | { ok: false; reason?: string; error?: string }>;
+      push(pluginName: string, opts?: { bumpPatch?: boolean }): Promise<{ ok: true; version: string; contentHash: string } | { ok: false; error?: string }>;
+      remove(registryId: string): Promise<{ ok: true } | { ok: false; error?: string }>;
+    };
   };
   mcp: {
     status(): Promise<McpStatus>;

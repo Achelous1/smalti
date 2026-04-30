@@ -30,6 +30,18 @@ function isExcluded(name: string): boolean {
 }
 
 /**
+ * Returns true if a relative path should be excluded from content hashing.
+ * plugin.spec.json contains registry metadata (source block) that changes on
+ * every push, so including it would make the hash unstable across push/pull
+ * cycles. All other files determine whether the plugin's logic has changed.
+ */
+function isExcludedFromHash(rel: string): boolean {
+  // Normalise to forward slashes for cross-platform comparison
+  const normalized = rel.split(path.sep).join('/');
+  return normalized === 'plugin.spec.json';
+}
+
+/**
  * Walk a directory recursively, returning sorted relative file paths.
  * Skips excluded entries (hidden files/dirs, node_modules).
  */
@@ -98,9 +110,12 @@ export function unpackZipFileToDirectory(srcZipPath: string, destDir: string): v
   unpackZipBufferToDirectory(buf, destDir);
 }
 
-/** Deterministic sha256 of directory contents (content-based, metadata-independent). */
+/** Deterministic sha256 of directory contents (content-based, metadata-independent).
+ *  Excludes plugin.spec.json so that registry metadata updates (source block) do not
+ *  change the content hash of the plugin logic itself.
+ */
 export function computeDirectoryContentHash(dir: string): ContentHash {
-  const files = walkFiles(dir);
+  const files = walkFiles(dir).filter((rel) => !isExcludedFromHash(rel));
   const parts: string[] = [];
   for (const rel of files) {
     const content = fs.readFileSync(path.join(dir, rel));

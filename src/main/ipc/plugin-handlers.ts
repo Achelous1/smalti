@@ -9,6 +9,7 @@ import type { PluginSpec } from '../plugin/spec-generator';
 import { generatePluginCode } from '../plugin/code-generator';
 import { PluginRegistry } from '../plugin/registry';
 import { getActiveWorkspacePath } from './workspace-handlers';
+import * as registryGlobal from '../plugin/registry-global';
 
 const registry = new PluginRegistry();
 
@@ -217,6 +218,7 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
     const localDir = getLocalPluginsDir(effectiveCwd);
     const spec = generatePluginSpec(name, description);
     const pluginDir = path.join(localDir, spec.name);
+    const specJsonPath = path.join(pluginDir, 'plugin.spec.json');
     try {
       generatePluginCode(spec, pluginDir);
       registry.register(spec, pluginDir);
@@ -226,6 +228,23 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
         fs.rmSync(pluginDir, { recursive: true });
       }
       throw err;
+    }
+    // Auto-push to global registry. Failure is non-fatal — local plugin is still valid.
+    try {
+      const pushed = registryGlobal.pushPlugin(pluginDir, {
+        id: spec.id,
+        name: spec.name,
+        description: spec.description,
+        version: spec.version,
+      });
+      spec.source = {
+        registryId: spec.id,
+        installedVersion: pushed.version,
+        installedContentHash: pushed.contentHash,
+      };
+      fs.writeFileSync(specJsonPath, JSON.stringify(spec, null, 2));
+    } catch (err) {
+      console.error('[smalti] auto-push to global registry failed (plugin still created locally):', err);
     }
     return spec;
   });
@@ -335,5 +354,115 @@ export function registerPluginHandlers(ipcMain: IpcMain, cwd: string): void {
       fs.rmSync(pluginDir, { recursive: true });
     }
     return { deleted: true };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Global plugin registry IPC handlers
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IPC_CHANNELS.PLUGIN_REGISTRY_LIST, async () => {
+    try {
+      return registryGlobal.listPlugins();
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PLUGIN_REGISTRY_DIFF, async (_e, pluginName: string) => {
+    try {
+      const effectiveCwd = getEffectiveCwd(cwd);
+      const localDir = getLocalPluginsDir(effectiveCwd);
+      const pluginDir = path.join(localDir, pluginName);
+      const spec = readPluginSpec(pluginDir);
+      if (!spec || !spec.source) return null;
+      return registryGlobal.diffPlugin(spec.source.registryId, pluginDir, {
+        installedVersion: spec.source.installedVersion,
+        installedContentHash: spec.source.installedContentHash,
+      });
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PLUGIN_REGISTRY_PULL, async (_e, registryId: string, version?: string, targetName?: string) => {
+    try {
+      const effectiveCwd = getEffectiveCwd(cwd);
+      const localDir = getLocalPluginsDir(effectiveCwd);
+
+      // Resolve the name to use for the workspace directory
+      const meta = registryGlobal.getPluginMeta(registryId);
+      if (!meta) return { ok: false, reason: 'not-found' };
+      const resolvedVersion = version ?? meta.latest;
+      const dirName = targetName ?? meta.name;
+      const destDir = path.join(localDir, dirName);
+
+      // Name conflict check
+      if (fs.existsSync(destDir)) {
+        return { ok: false, reason: 'name-conflict' };
+      }
+
+      fs.mkdirSync(destDir, { recursive: true });
+      const { contentHash } = registryGlobal.pullPlugin(registryId, resolvedVersion, destDir);
+
+      // Write/update spec.source in the pulled plugin.spec.json
+      const spec = readPluginSpec(destDir);
+      if (spec) {
+        spec.source = {
+          registryId,
+          installedVersion: resolvedVersion,
+          installedContentHash: contentHash,
+        };
+        fs.writeFileSync(path.join(destDir, 'plugin.spec.json'), JSON.stringify(spec, null, 2));
+      }
+
+      return { ok: true, pluginPath: destDir, contentHash };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PLUGIN_REGISTRY_PUSH, async (_e, pluginName: string, opts?: { bumpPatch?: boolean }) => {
+    try {
+      const effectiveCwd = getEffectiveCwd(cwd);
+      const localDir = getLocalPluginsDir(effectiveCwd);
+      const pluginDir = path.join(localDir, pluginName);
+      const spec = readPluginSpec(pluginDir);
+      if (!spec) return { ok: false, error: 'plugin not found' };
+
+      let version = spec.version;
+      if (opts?.bumpPatch) {
+        const parts = version.split('.').map(Number);
+        parts[2] = (parts[2] ?? 0) + 1;
+        version = parts.join('.');
+        spec.version = version;
+      }
+
+      const pushed = registryGlobal.pushPlugin(pluginDir, {
+        id: spec.id,
+        name: spec.name,
+        description: spec.description,
+        version,
+      });
+
+      spec.source = {
+        registryId: spec.id,
+        installedVersion: pushed.version,
+        installedContentHash: pushed.contentHash,
+      };
+      fs.writeFileSync(path.join(pluginDir, 'plugin.spec.json'), JSON.stringify(spec, null, 2));
+
+      return { ok: true, version: pushed.version, contentHash: pushed.contentHash };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PLUGIN_REGISTRY_REMOVE, async (_e, registryId: string) => {
+    try {
+      registryGlobal.removePlugin(registryId);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   });
 }
