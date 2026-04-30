@@ -123,7 +123,7 @@
      - **Update first, then edit** (권장 기본): 글로벌 최신 pull → MCP 호출자에게 "updated, please retry edit" 응답 (편집 자체는 적용 안 됨, 다음 호출에서 자연스럽게 처리)
      - **Fork & edit**: 자동으로 D6 의 Fork-as-new-plugin 실행 (auto-derived name) → 새 플러그인 트리에 MCP 편집 적용 → 응답에 새 `pluginId` 반환. 원본은 upstream 으로 자동 복원.
      - **Edit anyway**: 편집 즉시 적용. 결과는 `locally-modified` + `update-available` 동시 상태. 다음 sync 시 D3 의 경고 다이얼로그 트리거.
-4. 사용자가 다이얼로그를 닫지 않고 N 초(예: 30s) 대기 시 MCP 호출은 **차단된 상태로 유지**. 응답 timeout 은 MCP 호출자가 처리.
+4. 다이얼로그는 timeout 없이 **무한 차단 유지**. 사용자가 셋 중 하나를 명시적으로 누르기 전까지 MCP 호출은 응답 받지 못함. MCP 호출자(Claude Code 등) 의 자체 timeout 으로 인해 끊기더라도 다음 호출이 들어오면 같은 다이얼로그가 (또는 사용자가 결정한 결과로) 처리됨. 자동 "Edit anyway" 같은 fallback 은 만들지 않는다 — silent locally-modified 를 만드는 모든 경로를 차단하는 것이 D7 의 목적.
 5. 일관성: UI 의 Update/Fork 와 동일한 코드 경로(`registryGlobal.applyUpdate`, `registryGlobal.forkAsNew`) 호출. 새 헬퍼 추가 X.
 
 **핵심 메시지 (다이얼로그/MCP 응답 모두에 명시)**:
@@ -133,6 +133,21 @@
 **해당 흐름은 신규 6번째 화면 디자인 필요** — Phase 0 파일 목록에 `MCPEditConflictDialog.tsx` 추가, design.pen 에도 추가 mockup 필요.
 
 **보너스**: `aide_create_plugin` 도 같은 이름의 글로벌 entry 가 이미 존재하면(이름 충돌) 사용자에게 컨펌 — overwrite vs new-with-suffix vs cancel.
+
+### D8. MCP 네임스페이스 rebrand: `aide` → `smalti`
+프로젝트가 `aide` 에서 `smalti` 로 리브랜드된 상태인데, MCP 서버 노출 이름과 도구 prefix 는 여전히 `aide` 다 (`mcp__aide__aide_edit_plugin` 등). 워크스페이스 디렉토리는 이미 `.smalti/` 로 마이그레이션됐으니, MCP 도 같은 변경을 적용해 일관성을 맞춘다.
+
+**변경 대상**:
+- MCP 서버 등록 이름: `aide` → `smalti` (Claude Code/외부 클라이언트 측 호출은 `mcp__smalti__*` 로 노출됨)
+- 도구 prefix: `aide_create_plugin` → `smalti_create_plugin`, `aide_edit_plugin` → `smalti_edit_plugin`, `aide_delete_plugin` → `smalti_delete_plugin`, `aide_list_plugins` → `smalti_list_plugins`, `aide_invoke_tool` → `smalti_invoke_tool`
+- 플러그인 MCP 도구도 동일 (`plugin_agent-todo-board_*` 등 prefix 는 그대로 유지 — 플러그인 이름 자체이므로 rebrand 와 무관)
+
+**호환성 전략**:
+- 일정 기간(2~3 마이너 버전) `aide_*` 이름도 alias 로 함께 노출. 호출 시 deprecation warning 로그.
+- 외부 클라이언트의 MCP 설정에 `aide` 서버 이름이 박혀있을 수 있으므로 마이그레이션 가이드 문서화 필요.
+- `~/.claude.json`, `~/.gemini/settings.json`, `~/.codex/config.toml` 의 mcpServers 키도 함께 업데이트하는 헬퍼 1회성 마이그레이션 스크립트 제공 (`writeMcpConfig` 와 동일 위치).
+
+**별도 PR 권장**: 이 rebrand 는 본 플러그인 레지스트리 구현과 독립적이고 영향 범위가 큰(외부 사용자 노출 인터페이스 변경) 변경이므로 본 PR 또는 Phase 1 작업과 분리해 별도 PR 로 처리. 본 PLAN.md 의 D7 본문에 등장하는 `mcp__aide__*` 표기는 rebrand 적용 후 `mcp__smalti__*` 로 일괄 치환된다는 가정.
 
 ---
 
