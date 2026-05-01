@@ -1,4 +1,7 @@
 import * as crypto from 'crypto';
+import type { PluginSourceMeta } from '../../types/plugin-registry';
+
+export type { PluginSourceMeta };
 
 export interface PluginTool {
   name: string;
@@ -17,6 +20,8 @@ export interface PluginSpec {
   tools: PluginTool[];
   /** File extensions this plugin handles, e.g. ['.json', '.yaml'] */
   fileAssociations?: string[];
+  /** Populated after a successful push to the global registry. */
+  source?: PluginSourceMeta;
 }
 
 const ALL_PERMISSIONS = ['fs:read', 'fs:write', 'network', 'process'] as const;
