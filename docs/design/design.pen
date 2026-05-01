@@ -22736,7 +22736,8 @@
                       "fill": "#9BA0B0",
                       "content": "a mosaic of your own making.",
                       "fontFamily": "Space Grotesk",
-                      "fontSize": 28
+                      "fontSize": 28,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -22767,7 +22768,7 @@
                               "fill": {
                                 "type": "image",
                                 "enabled": true,
-                                "url": "./images/generated-1777007669830.png",
+                                "url": "images/generated-1777007669830.png",
                                 "mode": "fill"
                               }
                             }
@@ -25365,7 +25366,8 @@
                       "fill": "#E6E7ED",
                       "content": "[",
                       "fontFamily": "JetBrains Mono",
-                      "fontSize": 64
+                      "fontSize": 64,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -25434,7 +25436,8 @@
                       "fill": "#E6E7ED",
                       "content": "] $",
                       "fontFamily": "JetBrains Mono",
-                      "fontSize": 64
+                      "fontSize": 64,
+                      "fontWeight": "normal"
                     }
                   ]
                 },
@@ -26693,7 +26696,8 @@
                       "fill": "#9BA0B0",
                       "content": "an ai-native ide for cli agents.",
                       "fontFamily": "Space Grotesk",
-                      "fontSize": 28
+                      "fontSize": 28,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -29319,7 +29323,8 @@
                       "fill": "#E6E7ED",
                       "content": "[",
                       "fontFamily": "JetBrains Mono",
-                      "fontSize": 64
+                      "fontSize": 64,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -29388,7 +29393,8 @@
                       "fill": "#E6E7ED",
                       "content": "] $",
                       "fontFamily": "JetBrains Mono",
-                      "fontSize": 64
+                      "fontSize": 64,
+                      "fontWeight": "normal"
                     }
                   ]
                 },
@@ -30647,7 +30653,8 @@
                       "fill": "#5A5F6E",
                       "content": "an ai-native ide for cli agents.",
                       "fontFamily": "Space Grotesk",
-                      "fontSize": 28
+                      "fontSize": 28,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -33293,7 +33300,8 @@
                       "fill": "#2B8A94",
                       "content": "[",
                       "fontFamily": "JetBrains Mono",
-                      "fontSize": 64
+                      "fontSize": 64,
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -33367,7 +33375,8 @@
                       "fill": "#11131B",
                       "content": "] $",
                       "fontFamily": "JetBrains Mono",
-                      "fontSize": 64
+                      "fontSize": 64,
+                      "fontWeight": "normal"
                     }
                   ]
                 },
