@@ -21,6 +21,10 @@ Plugin global registry — workspace plugins can now be exported, imported, and 
 - `aide_*` MCP tool aliases — still routed to the new `smalti_*` handlers with a one-time deprecation warning per process; will be removed in a future release.
 - `mcpServers.aide` key in external configs — auto-migrated to `mcpServers.smalti` on register.
 
+### Fixed
+- **Update / Fork-restore-original flows now work** — `plugin:registry:pull` IPC accepts an `{ overwrite?: boolean }` option so `applyUpdate` and `forkAsNew(restoreOriginal: true)` can replace an existing plugin directory in place. Earlier release-candidate code rejected every such call as `name-conflict`, making the core update flow completely broken. Surfaced by Devil's Advocate review pre-release.
+- **Registry list error no longer corrupts UI** — `plugin:registry:list` returns `[]` on filesystem error instead of `{ ok: false, error }`, preventing `RegistryBrowser` from crashing on `.map()`.
+
 ### Tests
 - Suite grew from ~480 to **620 tests** with TDD coverage for zip-utils (round-trip + content hash determinism + path traversal), registry-global (push/pull/diff/state machine + immutable versions + atomic writes), IPC handlers (auto-push tolerance + diff states), all 5 UI components (badges, browser, 3 dialogs), the modifiedFiles wiring, and the local-build forge config branching.
 
