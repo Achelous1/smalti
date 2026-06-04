@@ -18,7 +18,7 @@ interface WorkspaceState {
   addWorkspace: (workspace: WorkspaceInfo) => void;
   removeWorkspace: (id: string) => void;
   renameWorkspace: (id: string, name: string) => void;
-  setActive: (id: string | null) => void;
+  setActive: (id: string | null) => Promise<void>;
   toggleNav: () => void;
   setSidePanelTab: (tab: SidePanelTab) => void;
   setSelectedFilePath: (path: string | null) => void;
@@ -26,24 +26,20 @@ interface WorkspaceState {
   loadWorkspaces: () => Promise<void>;
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
-  workspaces: [],
-  activeWorkspaceId: null,
-  recentProjects: [],
-  navExpanded: true,
-  sidePanelTab: 'files',
-  selectedFilePath: null,
-  setSidePanelTab: (tab) => set({ sidePanelTab: tab ?? 'files' }),
-  setSelectedFilePath: (path) => set({ selectedFilePath: path }),
-  addWorkspace: (workspace) =>
-    set((state) => ({ workspaces: [...state.workspaces, workspace] })),
-  removeWorkspace: (id) =>
-    set((state) => ({ workspaces: state.workspaces.filter((w) => w.id !== id) })),
-  renameWorkspace: (id, name) =>
-    set((state) => ({
-      workspaces: state.workspaces.map((w) => (w.id === id ? { ...w, name } : w)),
-    })),
-  setActive: async (id) => {
+export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
+  // Serialize workspace activation. setActive() runs several awaits (workspace
+  // open, plugin list, restoreSession's PTY spawns) before it commits the new
+  // `activeWorkspaceId` at the very end. Two overlapping calls — a double-click,
+  // a re-render double-fire, or a fast second switch — would otherwise BOTH read
+  // the same stale `prevId`, cache/persist the wrong workspace's layout, and
+  // leave `layout` desynced from `activeWorkspaceId`: the departing workspace's
+  // live tabs stay rendered under the newly-activated one (worse on Windows,
+  // where slow ConPTY spawns widen the race). Chaining each activation after the
+  // previous one guarantees every call observes the prior call's committed
+  // `activeWorkspaceId` as its `prevId`.
+  let activationChain: Promise<void> = Promise.resolve();
+
+  const activate = async (id: string | null): Promise<void> => {
     const prevId = get().activeWorkspaceId;
     if (id && id !== prevId) {
       // 1. Save departing workspace state (to disk and in-memory cache). PTYs are NOT killed.
@@ -96,27 +92,54 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       await usePluginStore.getState().loadPlugins();
     }
     set({ activeWorkspaceId: id });
-  },
-  toggleNav: () => set((state) => ({ navExpanded: !state.navExpanded })),
-  loadRecent: (projects) => set({ recentProjects: projects.slice(0, 5) }),
-  loadWorkspaces: async () => {
-    const [workspaces, recent] = await Promise.all([
-      window.aide.workspace.list(),
-      window.aide.workspace.recent(),
-    ]);
-    set({ workspaces, recentProjects: recent.slice(0, 5) });
+  };
 
-    // Auto-open the most recently accessed workspace on app launch.
-    // Only fires when no workspace is active yet (i.e. fresh boot, not after
-    // user has navigated away). The recent list is ordered newest-first, and
-    // we verify the workspace still exists in the workspaces list before
-    // activating to avoid resurrecting a deleted project.
-    if (!get().activeWorkspaceId && recent.length > 0) {
-      const mostRecent = recent[0];
-      const stillExists = workspaces.some((w) => w.id === mostRecent.id);
-      if (stillExists) {
-        await get().setActive(mostRecent.id);
+  return {
+    workspaces: [],
+    activeWorkspaceId: null,
+    recentProjects: [],
+    navExpanded: true,
+    sidePanelTab: 'files',
+    selectedFilePath: null,
+    setSidePanelTab: (tab) => set({ sidePanelTab: tab ?? 'files' }),
+    setSelectedFilePath: (path) => set({ selectedFilePath: path }),
+    addWorkspace: (workspace) =>
+      set((state) => ({ workspaces: [...state.workspaces, workspace] })),
+    removeWorkspace: (id) =>
+      set((state) => ({ workspaces: state.workspaces.filter((w) => w.id !== id) })),
+    renameWorkspace: (id, name) =>
+      set((state) => ({
+        workspaces: state.workspaces.map((w) => (w.id === id ? { ...w, name } : w)),
+      })),
+    setActive: (id) => {
+      // Queue behind any in-flight activation so prevId is always read after the
+      // previous switch has committed activeWorkspaceId. The chain keeps running
+      // even if one activation rejects.
+      const run = activationChain.then(() => activate(id));
+      activationChain = run.catch(() => { /* swallow so the chain survives */ });
+      return run;
+    },
+    toggleNav: () => set((state) => ({ navExpanded: !state.navExpanded })),
+    loadRecent: (projects) => set({ recentProjects: projects.slice(0, 5) }),
+    loadWorkspaces: async () => {
+      const [workspaces, recent] = await Promise.all([
+        window.aide.workspace.list(),
+        window.aide.workspace.recent(),
+      ]);
+      set({ workspaces, recentProjects: recent.slice(0, 5) });
+
+      // Auto-open the most recently accessed workspace on app launch.
+      // Only fires when no workspace is active yet (i.e. fresh boot, not after
+      // user has navigated away). The recent list is ordered newest-first, and
+      // we verify the workspace still exists in the workspaces list before
+      // activating to avoid resurrecting a deleted project.
+      if (!get().activeWorkspaceId && recent.length > 0) {
+        const mostRecent = recent[0];
+        const stillExists = workspaces.some((w) => w.id === mostRecent.id);
+        if (stillExists) {
+          await get().setActive(mostRecent.id);
+        }
       }
-    }
-  },
-}));
+    },
+  };
+});
