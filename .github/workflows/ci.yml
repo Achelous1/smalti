@@ -12,15 +12,20 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        node-version: [20]
+        # pnpm 11 requires Node >= 22.13 (uses node:sqlite). Node 20 fails with
+        # ERR_UNKNOWN_BUILTIN_MODULE during pnpm setup.
+        node-version: [22]
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup pnpm
+        # Must match local dev (pnpm 11). The repo's pnpm-workspace.yaml uses
+        # pnpm 11 settings keys (nodeLinker, allowBuilds) that pnpm 9 rejects
+        # with "packages field missing or empty".
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.0.8
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4

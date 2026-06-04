@@ -3,22 +3,25 @@ import { useThemeStore } from '../../stores/theme-store';
 export function TitleBar() {
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
+  const isDarwin = window.aide.system.isDarwin();
 
   return (
     <div
       className="relative flex items-center w-full shrink-0 bg-aide-surface border-b border-aide-border"
       style={{ height: '40px', WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* Left padding for macOS native traffic lights (hiddenInset) */}
-      <div className="w-20 shrink-0" />
+      {/* Left padding: macOS reserves space for native traffic lights (hiddenInset).
+          Windows/Linux render system buttons on the right via titleBarOverlay. */}
+      <div className={isDarwin ? 'w-20 shrink-0' : 'w-3 shrink-0'} />
 
       {/* Centered title */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <span className="text-[13px] font-bold font-mono text-aide-accent">&gt; smalti</span>
       </div>
 
-      {/* Right side: theme toggle */}
-      <div className="ml-auto pr-3 flex items-center">
+      {/* Right side: theme toggle. On Windows/Linux, leave room for the native
+          min/max/close buttons overlaid by titleBarOverlay (~138px wide). */}
+      <div className={`ml-auto flex items-center ${isDarwin ? 'pr-3' : 'pr-[150px]'}`}>
         <button
           onClick={toggleTheme}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}

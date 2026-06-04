@@ -309,7 +309,13 @@ export function PaneView({ pane }: PaneViewProps) {
             }
             return (
               <div key={tab.id} className="absolute inset-0" style={{ display: isVisible ? 'block' : 'none' }}>
-                {tab.sessionId && <TerminalPanel sessionId={tab.sessionId} visible={isVisible && isFocused} />}
+                {tab.sessionId ? (
+                  <TerminalPanel sessionId={tab.sessionId} visible={isVisible && isFocused} />
+                ) : (
+                  <div className="flex items-center justify-center h-full w-full text-[13px] font-mono text-aide-text-tertiary select-none">
+                    {tab.spawnState === 'failed' ? 'Failed to start session' : 'Starting…'}
+                  </div>
+                )}
               </div>
             );
           })

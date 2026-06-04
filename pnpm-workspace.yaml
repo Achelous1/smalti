@@ -1,0 +1,12 @@
+# pnpm 11 reads these settings from here, NOT .npmrc. node-linker=hoisted is
+# required by electron-forge (kept in .npmrc too for pnpm <11 / other tooling).
+# Build-script approval: `onlyBuiltDependencies` was renamed `allowBuilds` in v11.
+nodeLinker: hoisted
+
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  fs-xattr: true
+  macos-alias: true
+  unrs-resolver: true

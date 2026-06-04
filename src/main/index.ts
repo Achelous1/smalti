@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, screen } from 'electron';
 
 import { userInfo } from 'os';
 import path from 'path';
@@ -52,15 +52,42 @@ if (process.platform === 'win32') {
 const createWindow = (): void => {
   const { windowBounds } = getAppSettings();
 
+  // Validate persisted window bounds against current displays. If the saved
+  // position lies outside every connected display (e.g. user disconnected a
+  // monitor), drop x/y so Electron centers the window on the primary display.
+  const isOnScreen = (b: { x?: number; y?: number; width: number; height: number }): boolean => {
+    if (b.x == null || b.y == null) return false;
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    return screen.getAllDisplays().some((d) => {
+      const a = d.workArea;
+      return cx >= a.x && cx < a.x + a.width && cy >= a.y && cy < a.y + a.height;
+    });
+  };
+  const bounds = windowBounds && isOnScreen(windowBounds as { x?: number; y?: number; width: number; height: number })
+    ? windowBounds
+    : { width: windowBounds?.width ?? 1200, height: windowBounds?.height ?? 800 };
+
   const mainWindow = new BrowserWindow({
-    width: windowBounds?.width ?? 1200,
-    height: windowBounds?.height ?? 800,
-    x: windowBounds?.x,
-    y: windowBounds?.y,
+    width: bounds.width,
+    height: bounds.height,
+    x: (bounds as { x?: number }).x,
+    y: (bounds as { y?: number }).y,
     minWidth: 800,
     minHeight: 600,
     title: 'smalti',
-    titleBarStyle: 'hiddenInset',
+    // macOS: keep native traffic lights via 'hiddenInset'.
+    // Windows/Linux: 'hiddenInset' is ignored and the OS title bar shows on top
+    // of our custom <TitleBar />, causing duplication. Use 'hidden' + overlay so
+    // only our bar renders, with native min/max/close buttons overlaid on the right.
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    ...(process.platform !== 'darwin' && {
+      titleBarOverlay: {
+        color: '#00000000',
+        symbolColor: '#888888',
+        height: 40,
+      },
+    }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

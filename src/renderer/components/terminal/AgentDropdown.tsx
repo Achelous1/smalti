@@ -2,8 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useTerminalStore } from '../../stores/terminal-store';
 import { useAgentStore } from '../../stores/agent-store';
 import { useWorkspaceStore } from '../../stores/workspace-store';
-import { useLayoutStore } from '../../stores/layout-store';
-import { useToastStore } from '../../stores/toast-store';
+import { spawnTabInBackground } from '../../lib/spawn-tab';
 
 interface AgentOption {
   id: string;
@@ -56,7 +55,7 @@ interface AgentDropdownProps {
 }
 
 export function AgentDropdown({ paneId, onClose }: AgentDropdownProps) {
-  const { addTab, setActiveTab, toggleDropdown } = useTerminalStore();
+  const { toggleDropdown } = useTerminalStore();
   const { installedAgents, setInstalledAgents } = useAgentStore();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -88,40 +87,21 @@ export function AgentDropdown({ paneId, onClose }: AgentDropdownProps) {
     return installedAgents.some((a) => a.id === agentId);
   };
 
-  const handleSelect = async (option: AgentOption) => {
+  const handleSelect = (option: AgentOption) => {
     if (!isInstalled(option.id)) return;
     close();
 
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
-    const result = await window.aide.terminal.spawn(
-      option.command ? { shell: option.command, cwd: ws?.path } : { cwd: ws?.path }
+    spawnTabInBackground(
+      {
+        id: crypto.randomUUID(),
+        type: option.type as 'agent' | 'shell',
+        agentId: option.type === 'agent' ? option.id : undefined,
+        title: option.label,
+      },
+      paneId,
+      option.command ? { shell: option.command, cwd: ws?.path } : { cwd: ws?.path },
     );
-
-    if (!result.ok) {
-      useToastStore.getState().push({
-        kind: 'error',
-        title: `Failed to open terminal (${result.code ?? 'unknown'})`,
-        detail: result.error,
-      });
-      return;
-    }
-
-    const tab = {
-      id: crypto.randomUUID(),
-      type: option.type as 'agent' | 'shell',
-      agentId: option.type === 'agent' ? option.id : undefined,
-      sessionId: result.sessionId,
-      title: option.label,
-    };
-
-    // Add to both stores with real sessionId
-    addTab(tab);
-    setActiveTab(tab.id);
-
-    const targetPaneId = paneId ?? useLayoutStore.getState().getFocusedPane()?.id;
-    if (targetPaneId) {
-      useLayoutStore.getState().addTabToPane(targetPaneId, tab);
-    }
   };
 
   return (

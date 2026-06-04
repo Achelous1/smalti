@@ -72,6 +72,9 @@ export interface TerminalTab {
   pluginId?: string;
   sessionId?: string;
   agentSessionId?: string;  // Captured agent session ID for resume
+  /** Optimistic spawn lifecycle: tab is rendered before the PTY exists.
+   *  'spawning' = awaiting sessionId (show loading); 'failed' = spawn errored. */
+  spawnState?: 'spawning' | 'failed';
   title: string;
 }
 

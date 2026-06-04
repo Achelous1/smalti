@@ -129,6 +129,10 @@ interface LayoutState {
   moveTab: (fromPaneId: string, toPaneId: string, tabId: string) => void;
   reorderTab: (paneId: string, fromIndex: number, toIndex: number) => void;
   updateTabAgentSessionId: (ptySessionId: string, agentSessionId: string) => void;
+  /** Attach the real PTY sessionId to an optimistically-rendered tab (matched by tab id). */
+  updateTabSessionId: (tabId: string, sessionId: string) => void;
+  /** Mark an optimistic tab as failed to spawn (matched by tab id). */
+  markTabSpawnFailed: (tabId: string) => void;
   renameTabInPane: (paneId: string, tabId: string, title: string) => void;
 
   // Resize
@@ -503,6 +507,37 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     });
   },
 
+  updateTabSessionId: (tabId, sessionId) => {
+    set((state) => {
+      const layout = cloneNode(state.layout);
+      const allPanes = collectPanes(layout);
+      for (const pane of allPanes) {
+        const tab = pane.tabs.find((t) => t.id === tabId);
+        if (tab) {
+          tab.sessionId = sessionId;
+          tab.spawnState = undefined;
+          return { layout };
+        }
+      }
+      return state;
+    });
+  },
+
+  markTabSpawnFailed: (tabId) => {
+    set((state) => {
+      const layout = cloneNode(state.layout);
+      const allPanes = collectPanes(layout);
+      for (const pane of allPanes) {
+        const tab = pane.tabs.find((t) => t.id === tabId);
+        if (tab) {
+          tab.spawnState = 'failed';
+          return { layout };
+        }
+      }
+      return state;
+    });
+  },
+
   renameTabInPane: (paneId, tabId, title) => {
     set((state) => {
       const layout = cloneNode(state.layout);
@@ -593,6 +628,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       }
       const pane = node as Pane;
       const tabs: SavedTab[] = pane.tabs
+        // Skip optimistic tabs with no real PTY yet (still spawning, or failed).
+        // They have no sessionId to restore; an agent tab would even resume the
+        // wrong session via --continue on the next launch.
+        .filter((tab) => !tab.spawnState)
         .filter((tab) => tab.type !== 'plugin' || activePluginIds.has(tab.pluginId ?? ''))
         .map((tab) => ({
           id: tab.id,

@@ -49,7 +49,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   updateTabSession: (tabId, sessionId) =>
     set((state) => ({
-      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, sessionId } : t)),
+      tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, sessionId, spawnState: undefined } : t)),
     })),
 
   clearTabs: () => set({ tabs: [], activeTabId: null }),
