@@ -12,7 +12,9 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        node-version: [20]
+        # pnpm 11 requires Node >= 22.13 (uses node:sqlite). Node 20 fails with
+        # ERR_UNKNOWN_BUILTIN_MODULE during pnpm setup.
+        node-version: [22]
 
     steps:
       - uses: actions/checkout@v4
