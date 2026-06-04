@@ -15,6 +15,7 @@
 - [[main-process-cpu-home-watcher-bugfix]] — DMG idle CPU 127% 이슈, fallback cwd로 HOME 전체를 감시하던 chokidar watcher 라이프사이클 재설계
 
 ## Environment
+- [[pnpm11-settings-location]] — pnpm 11은 nodeLinker/allowBuilds를 pnpm-workspace.yaml에서 읽음(.npmrc 무시), onlyBuiltDependencies→allowBuilds 변경, 설정 누락 시 hoisted 링크 붕괴 함정
 - [[xterm-font-nerd-font]] — xterm.js Nerd Font 글리프 렌더링, Symbols Nerd Font 번들링
 - [[macos-tcc-file-permissions]] — macOS TCC Files and Folders 권한, 2단 방어(Info.plist + Permission Banner), Full Disk Access 불필요 근거
 

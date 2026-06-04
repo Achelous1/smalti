@@ -9,6 +9,53 @@ import { getHome } from '../utils/home';
 import { getNativeMod, type PtyHandle } from './fs-handlers';
 import type { AgentStatus } from '../../types/ipc';
 
+/**
+ * Resolve an executable on Windows so it can be spawned via CreateProcessW.
+ *
+ * npm-installed CLI agents (claude, gemini, codex) ship as `.cmd` shims on
+ * Windows. CreateProcessW (used by the Rust pty layer) can only execute PE
+ * binaries — passing `gemini.cmd` directly fails with os error 193
+ * ("not a valid Win32 application"). Wrap shims in their host interpreter.
+ *
+ * Returns the input unchanged on non-Windows platforms or when the command is
+ * already an .exe / absolute path that exists.
+ */
+function resolveWindowsExecutable(command: string, args: string[]): { command: string; args: string[] } {
+  if (process.platform !== 'win32') return { command, args };
+  if (command.toLowerCase().endsWith('.exe')) return { command, args };
+
+  // PATHEXT extensions take priority over the bare filename — npm installs
+  // both `gemini` (a bash shim, not runnable by CreateProcessW) and
+  // `gemini.cmd` (the Windows shim) into the same directory. We must pick
+  // the .cmd. The bare-name fallback is only for already-resolved absolute
+  // paths or extensionless executables (rare on Windows).
+  const pathExt = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';');
+  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  let resolved: string | null = null;
+  for (const dir of dirs) {
+    for (const ext of [...pathExt, '']) {
+      const candidate = path.join(dir, command + ext);
+      try {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          resolved = candidate;
+          break;
+        }
+      } catch { /* ignore */ }
+    }
+    if (resolved) break;
+  }
+  if (!resolved) return { command, args };
+
+  const lower = resolved.toLowerCase();
+  if (lower.endsWith('.cmd') || lower.endsWith('.bat')) {
+    return { command: 'cmd.exe', args: ['/d', '/s', '/c', resolved, ...args] };
+  }
+  if (lower.endsWith('.ps1')) {
+    return { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolved, ...args] };
+  }
+  return { command: resolved, args };
+}
+
 function getResumeArgs(agentType: string, sessionId: string): string[] {
   switch (agentType) {
     case 'claude': return ['--resume', sessionId];
@@ -81,6 +128,9 @@ interface PtySession {
 /** PTY data arriving within this window after user input is treated as echo, not agent output */
 const USER_ECHO_WINDOW_MS = 150;
 
+/** Gate the per-spawn timing log behind an env flag so it stays out of normal runs */
+const SPAWN_PERF_DEBUG = process.env.SMALTI_SPAWN_PERF === '1';
+
 const sessions = new Map<string, PtySession>();
 let sessionCounter = 0;
 
@@ -127,6 +177,7 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(
     IPC_CHANNELS.TERMINAL_SPAWN,
     (event, options?: { shell?: string; cwd?: string; agentType?: AgentType; resumeSessionId?: string; continueSession?: boolean }) => {
+      const tStart = performance.now();
       const defaultShell = getDefaultShell();
       const home = getHome();
       const rawCwd = options?.cwd || home;
@@ -200,11 +251,19 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
         lastUserInputAt: 0,
       } as PtySession;
 
+      // On Windows, npm CLI shims (claude.cmd, gemini.cmd, codex.cmd) cannot
+      // be launched directly by CreateProcessW — wrap them in their interpreter.
+      const tResolve0 = performance.now();
+      const resolved = resolveWindowsExecutable(shell, spawnArgs);
+      const resolveMs = performance.now() - tResolve0;
+      const prepMs = tResolve0 - tStart;
+
       let handle: PtyHandle;
+      const tNative0 = performance.now();
       try {
         handle = getNativeMod().spawnPty(
-          shell,
-          spawnArgs,
+          resolved.command,
+          resolved.args,
           cwd,
           envTuples,
           80,
@@ -243,6 +302,19 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
             shell,
           },
         };
+      }
+
+      if (SPAWN_PERF_DEBUG) {
+        const nativeMs = performance.now() - tNative0;
+        console.log(
+          '[spawn-perf] sid=%s type=%s prep=%dms resolve=%dms native=%dms total=%dms',
+          sessionId,
+          options?.agentType ?? 'shell',
+          Math.round(prepMs),
+          Math.round(resolveMs),
+          Math.round(nativeMs),
+          Math.round(performance.now() - tStart),
+        );
       }
 
       session.handle = handle;
