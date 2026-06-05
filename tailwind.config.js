@@ -53,7 +53,7 @@ module.exports = {
         'smalti-ink-950':  '#0A0B10',
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'IBM Plex Mono', 'monospace'],
+        mono: ['Cascadia Mono', 'JetBrains Mono', 'IBM Plex Mono', 'monospace'],
       },
     },
   },
