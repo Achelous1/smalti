@@ -702,14 +702,23 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     // previous session where layout and activePlugins drifted apart.
     const activePluginSet = new Set(session.activePlugins ?? []);
 
-    async function rebuildNode(node: SerializableLayoutNode): Promise<LayoutNode> {
+    // Build the layout tree synchronously with shell/agent tabs in a
+    // 'spawning' state, collecting a spawn job per tab. The layout is committed
+    // immediately (below) so the workspace renders without blocking on any PTY;
+    // the slow part (ConPTY spawn / agent resume) then runs in parallel and each
+    // tab's sessionId is attached as its spawn resolves. This mirrors
+    // spawnTabInBackground for new tabs — restoring no longer serially awaits K
+    // spawns before showing anything.
+    interface SpawnJob { tabId: string; isAgent: boolean; agentId?: string; agentSessionId?: string }
+    const spawnJobs: SpawnJob[] = [];
+
+    function buildNode(node: SerializableLayoutNode): LayoutNode {
       if ('direction' in node && 'children' in node) {
         const split = node as SerializableSplitLayout;
-        const children = await Promise.all(split.children.map(rebuildNode));
         return {
           id: split.id,
           direction: split.direction,
-          children,
+          children: split.children.map(buildNode),
           sizes: split.sizes,
         } as SplitLayout;
       }
@@ -737,43 +746,25 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           useTerminalStore.getState().addTab(tab);
           if (savedTab.isActive) activeTabId = tab.id;
         } else {
-          // shell or agent — spawn new PTY
-          let sessionId: string | null = null;
-          const isAgent = savedTab.type === 'agent';
-          const agentResult = await window.aide.terminal.spawn({
-            shell: savedTab.agentId || undefined,
-            cwd: wsPath,
-            agentType: isAgent ? (savedTab.agentId as 'claude' | 'gemini' | 'codex' | undefined) : undefined,
-            resumeSessionId: savedTab.agentSessionId,
-            continueSession: isAgent && !savedTab.agentSessionId,
+          // shell or agent — render now in 'spawning' state; the PTY is spawned
+          // in parallel below and its sessionId attached when it resolves.
+          const tab: TerminalTab = {
+            id: savedTab.id,
+            type: savedTab.type,
+            agentId: savedTab.agentId,
+            agentSessionId: savedTab.agentSessionId,
+            title: savedTab.title,
+            spawnState: 'spawning',
+          };
+          tabs.push(tab);
+          useTerminalStore.getState().addTab(tab);
+          spawnJobs.push({
+            tabId: savedTab.id,
+            isAgent: savedTab.type === 'agent',
+            agentId: savedTab.agentId,
+            agentSessionId: savedTab.agentSessionId,
           });
-          if (agentResult.ok) {
-            sessionId = agentResult.sessionId;
-          } else {
-            // agent not installed or spawn failed — fall back to plain shell
-            console.warn('[smalti] Session restore: agent spawn failed, falling back to shell', agentResult.error);
-            const shellResult = await window.aide.terminal.spawn({ cwd: wsPath });
-            if (shellResult.ok) {
-              sessionId = shellResult.sessionId;
-            } else {
-              console.warn('[smalti] Session restore: shell spawn also failed, skipping tab', shellResult.error);
-              restoreFailCount++;
-            }
-          }
-
-          if (sessionId) {
-            const tab: TerminalTab = {
-              id: savedTab.id,
-              type: savedTab.type,
-              agentId: savedTab.agentId,
-              agentSessionId: savedTab.agentSessionId,
-              sessionId,
-              title: savedTab.title,
-            };
-            tabs.push(tab);
-            useTerminalStore.getState().addTab(tab);
-            if (savedTab.isActive) activeTabId = tab.id;
-          }
+          if (savedTab.isActive) activeTabId = tab.id;
         }
       }
 
@@ -788,8 +779,44 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       return { id: savedPane.id, tabs, activeTabId } as Pane;
     }
 
-    const restoredLayout = await rebuildNode(session.layout);
-    set({ layout: restoredLayout, focusedPaneId: session.focusedPaneId });
+    // Commit the layout up front so the workspace appears instantly.
+    const builtLayout = buildNode(session.layout);
+    set({ layout: builtLayout, focusedPaneId: session.focusedPaneId });
+
+    // Spawn every saved PTY in parallel; attach each sessionId as it resolves,
+    // or mark the tab failed (PaneView renders the state) if spawn fails.
+    await Promise.all(
+      spawnJobs.map(async (job) => {
+        let sessionId: string | null = null;
+        const agentResult = await window.aide.terminal.spawn({
+          shell: job.agentId || undefined,
+          cwd: wsPath,
+          agentType: job.isAgent ? (job.agentId as 'claude' | 'gemini' | 'codex' | undefined) : undefined,
+          resumeSessionId: job.agentSessionId,
+          continueSession: job.isAgent && !job.agentSessionId,
+        });
+        if (agentResult.ok) {
+          sessionId = agentResult.sessionId;
+        } else {
+          // agent not installed or spawn failed — fall back to plain shell
+          console.warn('[smalti] Session restore: agent spawn failed, falling back to shell', agentResult.error);
+          const shellResult = await window.aide.terminal.spawn({ cwd: wsPath });
+          if (shellResult.ok) {
+            sessionId = shellResult.sessionId;
+          } else {
+            console.warn('[smalti] Session restore: shell spawn also failed', shellResult.error);
+            restoreFailCount++;
+          }
+        }
+
+        if (sessionId) {
+          get().updateTabSessionId(job.tabId, sessionId);
+          useTerminalStore.getState().updateTabSession(job.tabId, sessionId);
+        } else {
+          get().markTabSpawnFailed(job.tabId);
+        }
+      }),
+    );
 
     // Restore active plugins — await so registry is settled before loadPlugins() runs
     await Promise.allSettled(
