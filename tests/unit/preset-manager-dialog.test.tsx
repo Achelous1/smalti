@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
 import { PresetManagerDialog } from '../../src/renderer/components/palette/PresetManagerDialog';
 import { usePresetStore } from '../../src/renderer/stores/preset-store';
+import { useWorkspaceStore } from '../../src/renderer/stores/workspace-store';
 import type { CommandPreset } from '../../src/types/ipc';
 
 const savedPresets: { value: CommandPreset[] } = { value: [] };
@@ -18,6 +19,10 @@ beforeEach(() => {
       },
     },
   };
+  useWorkspaceStore.setState({
+    activeWorkspaceId: 'ws1',
+    workspaces: [{ id: 'ws1', name: 'aide', path: '/repo/aide', color: '#fff', lastOpened: 0 }],
+  });
   usePresetStore.setState({
     presets: [
       { id: 'p1', name: 'LazyGit', command: 'lazygit' },
@@ -62,6 +67,39 @@ describe('PresetManagerDialog', () => {
       expect(usePresetStore.getState().presets.map((p) => p.name)).toContain('Htop');
       expect(savedPresets.value.map((p) => p.name)).toContain('Htop');
     });
+    // Untouched prefilled cwd (= workspace root) is normalized away so the
+    // preset stays portable across workspaces.
+    const htop = usePresetStore.getState().presets.find((p) => p.name === 'Htop');
+    expect(htop?.cwd).toBeUndefined();
+  });
+
+  it('prefills working directory with the workspace absolute path in the new-preset form', () => {
+    const { getByTestId } = render(<PresetManagerDialog />);
+    fireEvent.click(getByTestId('preset-new'));
+    const cwd = getByTestId('preset-cwd-input') as HTMLInputElement;
+    expect(cwd.value).toBe('/repo/aide');
+  });
+
+  it('keeps an edited absolute working directory on save', async () => {
+    const { getByTestId } = render(<PresetManagerDialog />);
+    fireEvent.click(getByTestId('preset-new'));
+    fireEvent.change(getByTestId('preset-name-input'), { target: { value: 'Logs' } });
+    fireEvent.change(getByTestId('preset-command-input'), { target: { value: 'tail -f app.log' } });
+    fireEvent.change(getByTestId('preset-cwd-input'), { target: { value: '/var/log' } });
+    await act(async () => {
+      fireEvent.click(getByTestId('preset-save'));
+    });
+    await waitFor(() => {
+      const logs = usePresetStore.getState().presets.find((p) => p.name === 'Logs');
+      expect(logs?.cwd).toBe('/var/log');
+    });
+  });
+
+  it('uses descriptive english placeholders for name and command', () => {
+    const { getByTestId } = render(<PresetManagerDialog />);
+    fireEvent.click(getByTestId('preset-new'));
+    expect((getByTestId('preset-name-input') as HTMLInputElement).placeholder).toBe('Command name');
+    expect((getByTestId('preset-command-input') as HTMLInputElement).placeholder).toBe('shell command (npm run dev...)');
   });
 
   it('edits an existing preset with prefilled values', async () => {

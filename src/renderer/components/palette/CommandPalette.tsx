@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePresetStore } from '../../stores/preset-store';
 import { useWorkspaceStore } from '../../stores/workspace-store';
 import { fuzzyFilter, fuzzyMatch } from '../../utils/fuzzy-match';
+import { resolvePresetCwd } from '../../utils/preset-cwd';
 import { spawnTabInBackground } from '../../lib/spawn-tab';
 import type { CommandPreset } from '../../../types/ipc';
 
@@ -84,7 +85,7 @@ export function CommandPalette() {
 
   const runPreset = (preset: CommandPreset) => {
     if (!workspace) return;
-    const cwd = preset.cwd ? `${workspace.path}/${preset.cwd}` : workspace.path;
+    const cwd = resolvePresetCwd(preset.cwd, workspace.path);
     spawnTabInBackground(
       { id: crypto.randomUUID(), type: 'shell', presetId: preset.id, title: preset.name },
       undefined,

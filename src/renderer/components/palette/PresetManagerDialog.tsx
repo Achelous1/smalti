@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BaseDialog } from '../plugin/registry/dialogs/BaseDialog';
 import { usePresetStore } from '../../stores/preset-store';
+import { useWorkspaceStore } from '../../stores/workspace-store';
 
 interface EditState {
   id?: string;
@@ -8,8 +9,6 @@ interface EditState {
   command: string;
   cwd: string;
 }
-
-const EMPTY_EDIT: EditState = { name: '', command: '', cwd: '' };
 
 function PencilIcon() {
   return (
@@ -39,11 +38,17 @@ export function PresetManagerDialog() {
   const managerCreateRequest = usePresetStore((s) => s.managerCreateRequest);
   const presets = usePresetStore((s) => s.presets);
   const closeManager = usePresetStore((s) => s.closeManager);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const workspacePath = workspaces.find((w) => w.id === activeWorkspaceId)?.path ?? '';
   const [editing, setEditing] = useState<EditState | null>(null);
+
+  // New presets prefill cwd with the current workspace's absolute path
+  const newEdit = (): EditState => ({ name: '', command: '', cwd: workspacePath });
 
   useEffect(() => {
     if (managerOpen) {
-      setEditing(managerCreateRequest ? { ...EMPTY_EDIT } : null);
+      setEditing(managerCreateRequest ? newEdit() : null);
     }
   }, [managerOpen, managerCreateRequest]);
 
@@ -53,10 +58,13 @@ export function PresetManagerDialog() {
 
   const save = async () => {
     if (!editing || !valid) return;
+    const trimmedCwd = editing.cwd.trim();
     const patch = {
       name: editing.name.trim(),
       command: editing.command.trim(),
-      cwd: editing.cwd.trim() || undefined,
+      // The untouched prefill (= workspace root) is normalized away so the
+      // preset keeps meaning "workspace root" in any workspace.
+      cwd: trimmedCwd && trimmedCwd !== workspacePath ? trimmedCwd : undefined,
     };
     if (editing.id) {
       await usePresetStore.getState().updatePreset(editing.id, patch);
@@ -89,7 +97,7 @@ export function PresetManagerDialog() {
   const listFooter = (
     <button
       data-testid="preset-new"
-      onClick={() => setEditing({ ...EMPTY_EDIT })}
+      onClick={() => setEditing(newEdit())}
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-smalti-cyan text-smalti-ink-950 font-mono text-[12px] font-semibold hover:opacity-90 transition-opacity"
     >
       ＋ 새 프리셋
@@ -126,8 +134,8 @@ export function PresetManagerDialog() {
     >
       {editing ? (
         <div className="flex flex-col gap-3.5">
-          {field('Name', 'preset-name-input', editing.name, (name) => setEditing({ ...editing, name }))}
-          {field('Command', 'preset-command-input', editing.command, (command) => setEditing({ ...editing, command }), 'lazygit')}
+          {field('Name', 'preset-name-input', editing.name, (name) => setEditing({ ...editing, name }), 'Command name')}
+          {field('Command', 'preset-command-input', editing.command, (command) => setEditing({ ...editing, command }), 'shell command (npm run dev...)')}
           {field('Working Directory', 'preset-cwd-input', editing.cwd, (cwd) => setEditing({ ...editing, cwd }), '(워크스페이스 루트)')}
         </div>
       ) : (

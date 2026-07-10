@@ -6,6 +6,7 @@ import { useWorkspaceStore } from './workspace-store';
 import { usePluginStore } from './plugin-store';
 import { useToastStore } from './toast-store';
 import { usePresetStore } from './preset-store';
+import { resolvePresetCwd } from '../utils/preset-cwd';
 import { deactivatingPluginIds } from './plugin-deactivate-guard';
 
 let paneCounter = 0;
@@ -805,7 +806,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         // (the saved tab title is kept either way).
         const spawnOptions: TerminalSpawnOptions = job.presetId
           ? preset
-            ? { command: preset.command, cwd: preset.cwd && wsPath ? `${wsPath}/${preset.cwd}` : wsPath }
+            ? { command: preset.command, cwd: resolvePresetCwd(preset.cwd, wsPath) }
             : { cwd: wsPath }
           : {
               shell: job.agentId || undefined,
