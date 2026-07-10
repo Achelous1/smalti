@@ -71,14 +71,17 @@ vi.mock('../../src/main/mcp/config-writer', () => ({
   getMcpConfigPath: () => undefined,
 }));
 
-vi.mock('../../src/main/agent/agent-config', () => ({
-  getAgentSpawnConfig: (_type: string, defaultShell: string) => ({
-    command: defaultShell,
-    args: [],
-    extraEnv: {},
-  }),
-  COMMON_ENV: {},
-}));
+// Keep the real resolveSpawnCommand/getAgentSpawnConfig, only neutralize
+// COMMON_ENV so env assertions stay deterministic.
+vi.mock('../../src/main/agent/agent-config', async () => {
+  const actual = await vi.importActual<typeof import('../../src/main/agent/agent-config')>(
+    '../../src/main/agent/agent-config'
+  );
+  return {
+    ...actual,
+    COMMON_ENV: {},
+  };
+});
 
 vi.mock('../../src/main/utils/home', () => ({
   getHome: () => '/Users/testuser',

@@ -8,10 +8,13 @@ import { WelcomePage } from './components/welcome/WelcomePage';
 import { FileExplorer } from './components/file-explorer/FileExplorer';
 import { PluginPanel } from './components/plugin/PluginPanel';
 import { ToastContainer } from './components/common/ToastContainer';
+import { CommandPalette } from './components/palette/CommandPalette';
+import { PresetManagerDialog } from './components/palette/PresetManagerDialog';
 import { useWorkspaceStore } from './stores/workspace-store';
 import { useTerminalStore } from './stores/terminal-store';
 import { useLayoutStore } from './stores/layout-store';
 import { useThemeStore } from './stores/theme-store';
+import { usePresetStore } from './stores/preset-store';
 import * as xtermCache from './lib/xterm-cache';
 import { spawnTabInBackground } from './lib/spawn-tab';
 import { DARK_THEME, LIGHT_THEME } from './components/terminal/TerminalPanel';
@@ -33,6 +36,10 @@ export function App() {
   useEffect(() => {
     loadWorkspaces();
   }, [loadWorkspaces]);
+
+  useEffect(() => {
+    usePresetStore.getState().loadPresets();
+  }, []);
 
   // Propagate theme changes to ALL cached xterms (including inactive workspace terminals)
   useEffect(() => {
@@ -119,6 +126,15 @@ export function App() {
           undefined,
           { cwd: ws?.path },
         );
+        return;
+      }
+
+      // ⌘P / Ctrl+P: command preset palette
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!useWorkspaceStore.getState().activeWorkspaceId) return;
+        usePresetStore.getState().togglePalette();
         return;
       }
 
@@ -275,6 +291,8 @@ export function App() {
 
       <StatusBar />
       <ToastContainer />
+      <CommandPalette />
+      <PresetManagerDialog />
     </div>
   );
 }

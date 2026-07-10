@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { TerminalTab, Pane, SplitLayout, LayoutNode, SerializableLayoutNode, SerializablePane, SerializableSplitLayout, SavedTab, SavedSession } from '../../types/ipc';
+import type { TerminalTab, TerminalSpawnOptions, Pane, SplitLayout, LayoutNode, SerializableLayoutNode, SerializablePane, SerializableSplitLayout, SavedTab, SavedSession } from '../../types/ipc';
 import { isSplitLayout } from '../../types/ipc';
 import { useTerminalStore } from './terminal-store';
 import { useWorkspaceStore } from './workspace-store';
 import { usePluginStore } from './plugin-store';
 import { useToastStore } from './toast-store';
+import { usePresetStore } from './preset-store';
 import { deactivatingPluginIds } from './plugin-deactivate-guard';
 
 let paneCounter = 0;
@@ -641,6 +642,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           agentId: tab.agentId,
           pluginId: tab.pluginId,
           agentSessionId: tab.agentSessionId,
+          presetId: tab.presetId,
         }));
       return {
         id: pane.id,
@@ -709,7 +711,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     // tab's sessionId is attached as its spawn resolves. This mirrors
     // spawnTabInBackground for new tabs — restoring no longer serially awaits K
     // spawns before showing anything.
-    interface SpawnJob { tabId: string; isAgent: boolean; agentId?: string; agentSessionId?: string }
+    interface SpawnJob { tabId: string; isAgent: boolean; agentId?: string; agentSessionId?: string; presetId?: string }
     const spawnJobs: SpawnJob[] = [];
 
     function buildNode(node: SerializableLayoutNode): LayoutNode {
@@ -753,6 +755,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             type: savedTab.type,
             agentId: savedTab.agentId,
             agentSessionId: savedTab.agentSessionId,
+            presetId: savedTab.presetId,
             title: savedTab.title,
             spawnState: 'spawning',
           };
@@ -763,6 +766,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             isAgent: savedTab.type === 'agent',
             agentId: savedTab.agentId,
             agentSessionId: savedTab.agentSessionId,
+            presetId: savedTab.presetId,
           });
           if (savedTab.isActive) activeTabId = tab.id;
         }
@@ -785,16 +789,32 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
     // Spawn every saved PTY in parallel; attach each sessionId as it resolves,
     // or mark the tab failed (PaneView renders the state) if spawn fails.
+    // Preset tabs re-run their command on restore — ensure presets are loaded
+    // before the lookup (App's loadPresets() may not have resolved yet).
+    if (spawnJobs.some((job) => job.presetId)) {
+      await usePresetStore.getState().loadPresets();
+    }
+
     await Promise.all(
       spawnJobs.map(async (job) => {
         let sessionId: string | null = null;
-        const agentResult = await window.aide.terminal.spawn({
-          shell: job.agentId || undefined,
-          cwd: wsPath,
-          agentType: job.isAgent ? (job.agentId as 'claude' | 'gemini' | 'codex' | undefined) : undefined,
-          resumeSessionId: job.agentSessionId,
-          continueSession: job.isAgent && !job.agentSessionId,
-        });
+        const preset = job.presetId
+          ? usePresetStore.getState().presets.find((p) => p.id === job.presetId)
+          : undefined;
+        // Preset tab: re-run its command; deleted preset → plain shell fallback
+        // (the saved tab title is kept either way).
+        const spawnOptions: TerminalSpawnOptions = job.presetId
+          ? preset
+            ? { command: preset.command, cwd: preset.cwd && wsPath ? `${wsPath}/${preset.cwd}` : wsPath }
+            : { cwd: wsPath }
+          : {
+              shell: job.agentId || undefined,
+              cwd: wsPath,
+              agentType: job.isAgent ? (job.agentId as 'claude' | 'gemini' | 'codex' | undefined) : undefined,
+              resumeSessionId: job.agentSessionId,
+              continueSession: job.isAgent && !job.agentSessionId,
+            };
+        const agentResult = await window.aide.terminal.spawn(spawnOptions);
         if (agentResult.ok) {
           sessionId = agentResult.sessionId;
         } else {
