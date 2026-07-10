@@ -74,6 +74,21 @@ describe('CommandPalette', () => {
     expect(spawnOptions).toEqual({ command: 'npm run dev', cwd: '/repo/aide/web' });
   });
 
+  it('uses an absolute preset cwd as-is', () => {
+    usePresetStore.setState({
+      presets: [{ id: 'p3', name: 'Logs', command: 'tail -f app.log', cwd: '/var/log' }],
+      paletteOpen: true,
+      managerOpen: false,
+    });
+    const { getByTestId } = render(<CommandPalette />);
+    const input = getByTestId('palette-input');
+    fireEvent.change(input, { target: { value: 'logs' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const [, , spawnOptions] = vi.mocked(spawnTabInBackground).mock.calls[0];
+    expect(spawnOptions).toEqual({ command: 'tail -f app.log', cwd: '/var/log' });
+  });
+
   it('arrow keys move the selection before Enter', () => {
     const { getByTestId } = render(<CommandPalette />);
     const input = getByTestId('palette-input');
