@@ -35,6 +35,34 @@ function pickEnvByPrefix(prefix: string): Record<string, string> {
   return result;
 }
 
+/**
+ * Resolve the base executable + args for a terminal spawn request.
+ * Priority: agentType > command > shell.
+ *
+ * `command` (command presets) is wrapped in the login shell (`-ilc` on
+ * POSIX, `-NoLogo -Command` on Windows powershell) so the user's rc files,
+ * PATH, and aliases apply. Agent resume/continue args are appended by the
+ * caller — they depend on session state, not on the base command.
+ */
+export function resolveSpawnCommand(
+  options: { shell?: string; command?: string; agentType?: AgentType } | undefined,
+  defaultShell: string,
+  mcpConfigPath?: string,
+  platform: NodeJS.Platform = process.platform,
+): { shell: string; args: string[]; agentConfig: AgentSpawnConfig } {
+  const agentConfig = getAgentSpawnConfig(options?.agentType ?? 'shell', defaultShell, mcpConfigPath);
+  if (options?.agentType) {
+    return { shell: agentConfig.command, args: [...agentConfig.args], agentConfig };
+  }
+  if (options?.command) {
+    const args = platform === 'win32'
+      ? ['-NoLogo', '-Command', options.command]
+      : ['-ilc', options.command];
+    return { shell: defaultShell, args, agentConfig };
+  }
+  return { shell: options?.shell || defaultShell, args: [...agentConfig.args], agentConfig };
+}
+
 export function getAgentSpawnConfig(agentType: AgentType, defaultShell: string, mcpConfigPath?: string): AgentSpawnConfig {
   switch (agentType) {
     case 'claude':

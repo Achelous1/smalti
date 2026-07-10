@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { IPC_CHANNELS } from './channels';
 import { AgentStatusDetector } from '../agent/status-detector';
-import { getAgentSpawnConfig, COMMON_ENV, type AgentType } from '../agent/agent-config';
+import { resolveSpawnCommand, COMMON_ENV, type AgentType } from '../agent/agent-config';
 import { getMcpConfigPath } from '../mcp/config-writer';
 import { getHome } from '../utils/home';
 import { getNativeMod, type PtyHandle } from './fs-handlers';
@@ -176,7 +176,7 @@ export async function killAllSessions(): Promise<void> {
 export function registerTerminalHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(
     IPC_CHANNELS.TERMINAL_SPAWN,
-    (event, options?: { shell?: string; cwd?: string; agentType?: AgentType; resumeSessionId?: string; continueSession?: boolean }) => {
+    (event, options?: { shell?: string; cwd?: string; agentType?: AgentType; resumeSessionId?: string; continueSession?: boolean; command?: string }) => {
       const tStart = performance.now();
       const defaultShell = getDefaultShell();
       const home = getHome();
@@ -185,8 +185,7 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
       const sessionId = `term-${++sessionCounter}`;
 
       const mcpConfig = getMcpConfigPath();
-      const agentConfig = getAgentSpawnConfig(options?.agentType ?? 'shell', defaultShell, mcpConfig);
-      const shell = options?.agentType ? agentConfig.command : (options?.shell || defaultShell);
+      const { shell, args, agentConfig } = resolveSpawnCommand(options, defaultShell, mcpConfig, process.platform);
 
       // Build env from explicit allowlist — never spread full process.env
       // to prevent leaking secrets (AWS keys, tokens, etc.) to child processes
@@ -228,7 +227,7 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
         } catch { /* ignore */ }
       }
 
-      let spawnArgs = [...agentConfig.args];
+      let spawnArgs = args;
       if (options?.agentType && options.agentType !== 'shell') {
         if (options.resumeSessionId) {
           spawnArgs = [...spawnArgs, ...getResumeArgs(options.agentType, options.resumeSessionId)];

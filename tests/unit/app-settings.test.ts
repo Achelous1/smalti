@@ -30,8 +30,10 @@ vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/test' },
 }));
 
-import { getAppSettings, setAppSetting } from '../../src/main/ipc/app-settings-handlers';
+import { getAppSettings, setAppSetting, registerAppSettingsHandlers } from '../../src/main/ipc/app-settings-handlers';
 import type { AppSettings } from '../../src/main/ipc/app-settings-handlers';
+import { IPC_CHANNELS } from '../../src/main/ipc/channels';
+import type { CommandPreset } from '../../src/types/ipc';
 
 describe('app-settings-handlers', () => {
   beforeEach(() => {
@@ -83,6 +85,35 @@ describe('app-settings-handlers', () => {
       setAppSetting('windowBounds', { x: 0, y: 0, width: 800, height: 600 });
       setAppSetting('windowBounds', null);
       expect(getAppSettings().windowBounds).toBeNull();
+    });
+  });
+
+  describe('commandPresets', () => {
+    const preset: CommandPreset = { id: 'p1', name: 'LazyGit', command: 'lazygit' };
+
+    it('defaults to empty array on first launch', () => {
+      expect(getAppSettings().commandPresets).toEqual([]);
+    });
+
+    it('roundtrips presets through set/get', () => {
+      const presets = [preset, { id: 'p2', name: 'Dev Server', command: 'npm run dev', cwd: 'web' }];
+      setAppSetting('commandPresets', presets);
+      expect(getAppSettings().commandPresets).toEqual(presets);
+    });
+
+    it('APP_SETTINGS_SET handler accepts the commandPresets key', () => {
+      const handlers = new Map<string, (...args: unknown[]) => unknown>();
+      const fakeIpcMain = {
+        handle: (channel: string, fn: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, fn);
+        },
+      } as unknown as Parameters<typeof registerAppSettingsHandlers>[0];
+      registerAppSettingsHandlers(fakeIpcMain);
+
+      const setHandler = handlers.get(IPC_CHANNELS.APP_SETTINGS_SET);
+      expect(setHandler).toBeDefined();
+      setHandler!({}, 'commandPresets', [preset]);
+      expect(getAppSettings().commandPresets).toEqual([preset]);
     });
   });
 
