@@ -99,7 +99,7 @@ html, body, #root {
 }
 
 body {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-family: 'Cascadia Mono', 'JetBrains Mono', 'IBM Plex Mono', monospace;
   background: var(--background);
   color: var(--text-primary);
 }
@@ -214,7 +214,7 @@ body {
 }
 
 .drag-drop-overlay__text {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-family: 'Cascadia Mono', 'JetBrains Mono', 'IBM Plex Mono', monospace;
   font-size: 12px;
   color: var(--accent);
   opacity: 0.9;

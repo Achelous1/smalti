@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
-import { useTerminalStore } from '../../stores/terminal-store';
 import { useAgentStore } from '../../stores/agent-store';
 import { useWorkspaceStore } from '../../stores/workspace-store';
-import { useLayoutStore } from '../../stores/layout-store';
-import { useToastStore } from '../../stores/toast-store';
+import { spawnTabInBackground } from '../../lib/spawn-tab';
 
 interface AgentButton {
   id: string;
@@ -53,7 +51,6 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ paneId }: EmptyStateProps) {
-  const { addTab, setActiveTab } = useTerminalStore();
   const { installedAgents, setInstalledAgents } = useAgentStore();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
@@ -67,34 +64,20 @@ export function EmptyState({ paneId }: EmptyStateProps) {
     return installedAgents.some((a) => a.id === agentId);
   };
 
-  const handleSelect = async (btn: AgentButton) => {
+  const handleSelect = (btn: AgentButton) => {
     if (!isInstalled(btn.id)) return;
 
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
-    const result = await window.aide.terminal.spawn(
-      btn.command ? { shell: btn.command, cwd: ws?.path } : { cwd: ws?.path }
+    spawnTabInBackground(
+      {
+        id: crypto.randomUUID(),
+        type: btn.type,
+        agentId: btn.type === 'agent' ? btn.id : undefined,
+        title: btn.type === 'agent' ? btn.id : '$ shell',
+      },
+      paneId,
+      btn.command ? { shell: btn.command, cwd: ws?.path } : { cwd: ws?.path },
     );
-
-    if (!result.ok) {
-      useToastStore.getState().push({
-        kind: 'error',
-        title: `Failed to open terminal (${result.code ?? 'unknown'})`,
-        detail: result.error,
-      });
-      return;
-    }
-
-    const tab = {
-      id: crypto.randomUUID(),
-      type: btn.type,
-      agentId: btn.type === 'agent' ? btn.id : undefined,
-      sessionId: result.sessionId,
-      title: btn.type === 'agent' ? btn.id : '$ shell',
-    };
-
-    addTab(tab);
-    setActiveTab(tab.id);
-    useLayoutStore.getState().addTabToPane(paneId, tab);
   };
 
   return (

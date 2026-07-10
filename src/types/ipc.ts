@@ -5,6 +5,18 @@ export interface TerminalSpawnOptions {
   agentType?: 'claude' | 'gemini' | 'codex' | 'shell';
   resumeSessionId?: string;  // Agent session ID for resume (--resume <id>)
   continueSession?: boolean; // Resume most recent session (--continue / --resume bare)
+  /** Command string run via the login shell (-ilc) so user PATH/aliases apply — used by command presets */
+  command?: string;
+}
+
+/** User-defined command preset launched from the command palette (⌘P) */
+export interface CommandPreset {
+  id: string;
+  name: string;
+  /** Shell command to execute, e.g. "lazygit", "npm run dev" */
+  command: string;
+  /** Workspace-relative working directory; defaults to the workspace root */
+  cwd?: string;
 }
 
 /** Structured result returned by terminal.spawn() — never rejects */
@@ -72,6 +84,10 @@ export interface TerminalTab {
   pluginId?: string;
   sessionId?: string;
   agentSessionId?: string;  // Captured agent session ID for resume
+  presetId?: string;        // Command preset that spawned this tab (re-run on session restore)
+  /** Optimistic spawn lifecycle: tab is rendered before the PTY exists.
+   *  'spawning' = awaiting sessionId (show loading); 'failed' = spawn errored. */
+  spawnState?: 'spawning' | 'failed';
   title: string;
 }
 
@@ -181,6 +197,7 @@ export interface SavedTab {
   agentId?: string;
   pluginId?: string;
   agentSessionId?: string;
+  presetId?: string;
 }
 
 export interface SavedSession {
@@ -283,7 +300,7 @@ export interface AideAPI {
     write(settings: WorkspaceSettings): Promise<void>;
   };
   appSettings: {
-    get(): Promise<{ theme: 'dark' | 'light'; windowBounds: { x: number; y: number; width: number; height: number } | null }>;
+    get(): Promise<{ theme: 'dark' | 'light'; windowBounds: { x: number; y: number; width: number; height: number } | null; commandPresets: CommandPreset[] }>;
     set(key: string, value: unknown): Promise<void>;
   };
   files: {

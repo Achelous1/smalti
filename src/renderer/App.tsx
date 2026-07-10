@@ -8,11 +8,15 @@ import { WelcomePage } from './components/welcome/WelcomePage';
 import { FileExplorer } from './components/file-explorer/FileExplorer';
 import { PluginPanel } from './components/plugin/PluginPanel';
 import { ToastContainer } from './components/common/ToastContainer';
+import { CommandPalette } from './components/palette/CommandPalette';
+import { PresetManagerDialog } from './components/palette/PresetManagerDialog';
 import { useWorkspaceStore } from './stores/workspace-store';
 import { useTerminalStore } from './stores/terminal-store';
 import { useLayoutStore } from './stores/layout-store';
 import { useThemeStore } from './stores/theme-store';
+import { usePresetStore } from './stores/preset-store';
 import * as xtermCache from './lib/xterm-cache';
+import { spawnTabInBackground } from './lib/spawn-tab';
 import { DARK_THEME, LIGHT_THEME } from './components/terminal/TerminalPanel';
 
 export function App() {
@@ -32,6 +36,10 @@ export function App() {
   useEffect(() => {
     loadWorkspaces();
   }, [loadWorkspaces]);
+
+  useEffect(() => {
+    usePresetStore.getState().loadPresets();
+  }, []);
 
   // Propagate theme changes to ALL cached xterms (including inactive workspace terminals)
   useEffect(() => {
@@ -113,21 +121,20 @@ export function App() {
         const wsId = useWorkspaceStore.getState().activeWorkspaceId;
         if (!wsId) return;
         const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === wsId);
-        window.aide.terminal.spawn({ cwd: ws?.path }).then((sessionId) => {
-          const tab = {
-            id: crypto.randomUUID(),
-            type: 'shell' as const,
-            sessionId,
-            title: '$ shell',
-          };
-          useTerminalStore.getState().addTab(tab);
-          const pane = useLayoutStore.getState().getFocusedPane();
-          if (pane) {
-            useLayoutStore.getState().addTabToPane(pane.id, tab);
-          }
-        }).catch(() => {
-          // ignore spawn errors
-        });
+        spawnTabInBackground(
+          { id: crypto.randomUUID(), type: 'shell', title: '$ shell' },
+          undefined,
+          { cwd: ws?.path },
+        );
+        return;
+      }
+
+      // ⌘P / Ctrl+P: command preset palette
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!useWorkspaceStore.getState().activeWorkspaceId) return;
+        usePresetStore.getState().togglePalette();
         return;
       }
 
@@ -203,20 +210,11 @@ export function App() {
         const wsId = useWorkspaceStore.getState().activeWorkspaceId;
         if (!wsId) return;
         const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === wsId);
-        window.aide.terminal.spawn({ shell: agentShortcut.command, cwd: ws?.path }).then((sessionId) => {
-          const tab = {
-            id: crypto.randomUUID(),
-            type: 'agent' as const,
-            agentId: agentShortcut.id,
-            sessionId,
-            title: agentShortcut.label,
-          };
-          useTerminalStore.getState().addTab(tab);
-          const pane = useLayoutStore.getState().getFocusedPane();
-          if (pane) {
-            useLayoutStore.getState().addTabToPane(pane.id, tab);
-          }
-        }).catch(() => {});
+        spawnTabInBackground(
+          { id: crypto.randomUUID(), type: 'agent', agentId: agentShortcut.id, title: agentShortcut.label },
+          undefined,
+          { shell: agentShortcut.command, cwd: ws?.path },
+        );
         return;
       }
 
@@ -293,6 +291,8 @@ export function App() {
 
       <StatusBar />
       <ToastContainer />
+      <CommandPalette />
+      <PresetManagerDialog />
     </div>
   );
 }

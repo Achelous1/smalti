@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '../main/ipc/channels';
-import type { AideAPI, AgentStatus, TerminalSpawnOptions, PluginSpec, McpStatus, PluginTool, WorkspaceSettings, SavedSession, UpdateInfo, FsReadTreeError, FileTreeNode } from '../types/ipc';
+import type { AideAPI, AgentStatus, TerminalSpawnOptions, PluginSpec, McpStatus, PluginTool, WorkspaceSettings, SavedSession, UpdateInfo, FsReadTreeError, FileTreeNode, CommandPreset } from '../types/ipc';
 
 const aideAPI: AideAPI = {
   fs: {
@@ -150,7 +150,7 @@ const aideAPI: AideAPI = {
   },
 
   appSettings: {
-    get: (): Promise<{ theme: 'dark' | 'light'; windowBounds: { x: number; y: number; width: number; height: number } | null }> =>
+    get: (): Promise<{ theme: 'dark' | 'light'; windowBounds: { x: number; y: number; width: number; height: number } | null; commandPresets: CommandPreset[] }> =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_SETTINGS_GET),
     set: (key: string, value: unknown): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_SETTINGS_SET, key, value),
