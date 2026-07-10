@@ -3,6 +3,21 @@
 All notable changes to Smalti are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning per [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-07-10
+
+Command preset palette — register commands like `lazygit` or `npm run dev` as presets and open them as new terminal tabs from a VSCode-style ⌘P palette, the title bar, or session restore.
+
+### Added
+- **Command preset palette (⌘P / Ctrl+P)** — overlay with fuzzy subsequence search over preset name+command, built-in new-tab entries (Claude / Gemini / Codex / shell), and preset actions. Enter opens the selection as a new tab in the focused pane through the shared `spawnTabInBackground` path. PR #152.
+- **`TerminalSpawnOptions.command`** — preset commands run through the default login shell (`-ilc` on POSIX, `-NoLogo -Command` on Windows powershell) so user rc files, PATH, and aliases apply. `resolveSpawnCommand()` resolves shell+args with priority `agentType > command > shell`. PR #152.
+- **Preset manager dialog** — create / edit / delete presets (name, command, optional working directory). Presets persist via `AppSettings.commandPresets` through the existing app-settings channels — no new IPC channels. PR #152.
+- **Session restore for preset tabs** — a preset tab re-runs its command on restore via `SavedTab.presetId`; a deleted preset falls back to a plain shell keeping the saved title. PR #152.
+- **Title bar command button** — terminal-prompt icon left of the theme toggle opens the palette; tooltip shows the platform shortcut. PR #152.
+- **Preset form defaults** — Working Directory prefills with the active workspace's absolute path (an untouched prefill is normalized back to "workspace root" so presets stay portable); `resolvePresetCwd()` accepts absolute POSIX/Windows paths as-is and joins relative ones onto the workspace root. Clearer placeholders (`Command name`, `shell command (npm run dev...)`). PR #153.
+
+### Documentation
+- **Command preset palette spec** (`docs/ideation/command-preset-palette.md`) — data model, spawn design, UI brief, edge cases, test strategy, and implementation goal, plus design.pen mockups for the palette (dark/light), preset manager, and preset edit screens. PR #152.
+
 ## [0.3.1] — 2026-05-02
 
 Hotfix release closing the v0.2.x → v0.3.0 migration loop. Plugins generated under v0.1.x that hardcode `.aide/` workspace paths now resolve correctly through the MCP server, and the migration design is captured in a written PRD with full regression coverage.
