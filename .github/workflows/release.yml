@@ -1,0 +1,171 @@
+name: Release
+
+# Builds the packaged app for every supported OS and attaches the artifacts to
+# the GitHub release for a tag. The in-app updater (src/main/updater/check.ts)
+# reads these assets off the "latest release" API — a release with no artifact
+# for a platform means that platform silently cannot update, which is exactly
+# how Windows ended up with no upgrade path through v0.4.0.
+#
+# History: an earlier release.yml was removed in 6e9a792 because the macOS job
+# was flaky — build.sh drove Finder via AppleScript to lay out the DMG icons,
+# which is unreliable on a headless runner. That step is now non-fatal (build.sh
+# warns and ships a plain DMG if the AppleScript fails), so macOS is back on CI.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v0.4.0). Must already exist.'
+        required: true
+      dry_run:
+        description: 'Build only — do not create or modify any GitHub release.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  # A tag push is always a real release. Dispatch defaults to dry-run so a manual
+  # "does the workflow work?" run can never clobber a published release's assets.
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  # Create the release up front so the parallel build jobs never race to create it.
+  create-release:
+    if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — its assets will be replaced."
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          fi
+
+  build:
+    needs: create-release
+    # needs: is skipped along with create-release on a dry run — run anyway.
+    if: always() && needs.create-release.result != 'failure'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing must not cancel the other: a partial release beats
+      # none, and the failed platform can be retried via workflow_dispatch.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_dispatch defaults to the default branch — pin to the tag.
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        # Same pinned SHA as ci.yml — see the note there before bumping.
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+
+      - name: Add darwin universal targets
+        # build.sh runs build:native:universal, which lipo-merges both arches.
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      # --- macOS: build.sh produces out/Smalti.dmg + out/Smalti.app.zip.
+      # It runs pnpm install / lint / package itself and hard-fails if the
+      # darwin-universal .node is missing.
+      - name: Build macOS DMG + app.zip
+        if: runner.os == 'macOS'
+        run: sh ./build.sh
+
+      # --- Windows: electron-forge MakerSquirrel produces the installer.
+      - name: Install dependencies
+        if: runner.os == 'Windows'
+        # postinstall builds the Rust .node (scripts/build-native.mjs)
+        run: pnpm install
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: pnpm run make
+
+      # Squirrel names the installer "Smalti-<version> Setup.exe". The literal
+      # space breaks glob-expanded upload args, and a versionless, space-free
+      # name is friendlier to download — rename before publishing.
+      - name: Stage Windows artifacts
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -e
+          cd out/make/squirrel.windows/x64
+          setup=(*.exe)
+          if [ ! -f "${setup[0]}" ]; then
+            echo "::error::No Squirrel .exe under out/make/squirrel.windows/x64"
+            exit 1
+          fi
+          mv "${setup[0]}" "Smalti-Setup-${TAG}.exe"
+          ls -la
+
+      - name: Upload macOS assets to release
+        if: runner.os == 'macOS' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$TAG" out/Smalti.dmg out/Smalti.app.zip --clobber
+
+      - name: Upload Windows assets to release
+        if: runner.os == 'Windows' && env.DRY_RUN != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          cd out/make/squirrel.windows/x64
+          # RELEASES + .nupkg are Squirrel's own update feed. Not consumed yet
+          # (the app downloads and runs Setup.exe), but they cost nothing to
+          # publish and are what a future silent-update path would need.
+          gh release upload "$TAG" \
+            "Smalti-Setup-${TAG}.exe" \
+            *.nupkg \
+            RELEASES \
+            --clobber
+
+      # Dry run: keep the build output as a workflow artifact so the run can be
+      # verified end-to-end without touching any published release.
+      - name: Upload build output as workflow artifact (dry run)
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 5
+          path: |
+            out/Smalti.dmg
+            out/Smalti.app.zip
+            out/make/squirrel.windows/x64/*.exe
+            out/make/squirrel.windows/x64/*.nupkg
+            out/make/squirrel.windows/x64/RELEASES
