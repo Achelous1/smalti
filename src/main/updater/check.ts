@@ -1,10 +1,16 @@
 /**
  * Auto-update checker — polls the GitHub Releases API for the latest tag and
  * compares it to the running version. On new version: caches the metadata and
- * notifies the renderer. The user clicks "download" → DMG is fetched to the
- * Downloads directory and opened in Finder for the user to drag into
- * Applications. (We don't do in-place .app replacement yet — the build is
- * unsigned, so a real Squirrel auto-update would silently fail anyway.)
+ * notifies the renderer.
+ *
+ * The install path is platform-specific, because the release carries a
+ * different artifact per OS (see .github/workflows/release.yml):
+ * - macOS: `.app.zip` → extract and swap the bundle via a detached script.
+ *   Falls back to fetching the `.dmg` into ~/Downloads and revealing it.
+ * - Windows: the Squirrel `Setup.exe` → download it and launch the installer,
+ *   then quit so it can overwrite the running app. The build is unsigned, so
+ *   Squirrel's own silent in-place update would fail; running the installer is
+ *   the path that actually works.
  */
 import { app, BrowserWindow, net, shell } from 'electron';
 import * as fs from 'fs';
@@ -29,13 +35,13 @@ export interface UpdateInfo {
   currentVersion: string;
   /** True if latestTag > currentVersion */
   hasUpdate: boolean;
-  /** Download URL of the macOS DMG asset, if present */
+  /** Download URL of the installer for THIS platform (.dmg on macOS, Setup .exe on Windows) */
   downloadUrl: string | null;
-  /** Download URL of the .app.zip asset for in-place auto-install, if present */
+  /** Download URL of the macOS .app.zip asset for in-place auto-install. Always null off macOS. */
   zipDownloadUrl: string | null;
   /** Human-readable release name */
   releaseName: string | null;
-  /** Web URL of the release page (fallback for non-DMG platforms) */
+  /** Web URL of the release page (fallback when no installer asset matches) */
   htmlUrl: string | null;
 }
 
@@ -76,6 +82,28 @@ export function isNewer(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * Extension of the installer asset this platform installs from.
+ * Windows releases carry the Squirrel `Smalti-<ver> Setup.exe`; macOS carries the `.dmg`.
+ */
+function installerExt(platform: NodeJS.Platform): string {
+  return platform === 'win32' ? '.exe' : '.dmg';
+}
+
+/**
+ * Pick the installer asset for a platform from a release's asset list.
+ *
+ * Matched by extension rather than exact name: the Squirrel exe embeds the
+ * version and a literal space (`Smalti-0.4.1 Setup.exe`), and the product name
+ * changes between local and release builds. Exported for unit testing.
+ */
+export function findInstallerAsset(
+  assets: GithubAsset[],
+  platform: NodeJS.Platform = process.platform,
+): GithubAsset | undefined {
+  return assets.find((a) => a.name.endsWith(installerExt(platform)));
+}
+
 function broadcast(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(IPC_CHANNELS.UPDATER_INFO_CHANGED, cachedInfo);
@@ -105,14 +133,17 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 
     const latestTag = release.tag_name;
     const currentVersion = app.getVersion();
-    const dmgAsset = release.assets.find((a) => a.name.endsWith('.dmg'));
-    const zipAsset = release.assets.find((a) => a.name.endsWith('.app.zip'));
+    const installerAsset = findInstallerAsset(release.assets);
+    // .app.zip drives the in-place bundle swap — macOS only.
+    const zipAsset = process.platform === 'darwin'
+      ? release.assets.find((a) => a.name.endsWith('.app.zip'))
+      : undefined;
 
     cachedInfo = {
       latestTag,
       currentVersion,
       hasUpdate: isNewer(latestTag, currentVersion),
-      downloadUrl: dmgAsset?.browser_download_url ?? null,
+      downloadUrl: installerAsset?.browser_download_url ?? null,
       zipDownloadUrl: zipAsset?.browser_download_url ?? null,
       releaseName: release.name,
       htmlUrl: release.html_url,
@@ -132,9 +163,9 @@ export function getCachedUpdateInfo(): UpdateInfo | null {
 }
 
 /**
- * Download the DMG asset to ~/Downloads and reveal it in Finder.
- * Falls back to opening the release page if no DMG asset is available
- * or the download fails.
+ * Download this platform's installer (.dmg / Setup.exe) to ~/Downloads and
+ * reveal it in Finder / Explorer. Falls back to opening the release page if no
+ * installer asset matched or the download fails.
  */
 export async function downloadUpdate(): Promise<{ ok: boolean; path?: string; error?: string }> {
   if (downloading) return { ok: false, error: 'Already downloading' };
@@ -153,7 +184,7 @@ export async function downloadUpdate(): Promise<{ ok: boolean; path?: string; er
   try {
     const downloadsDir = path.join(getHome(), 'Downloads');
     if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
-    const filename = `smalti-${cachedInfo.latestTag}.dmg`;
+    const filename = `smalti-${cachedInfo.latestTag}${installerExt(process.platform)}`;
     const targetPath = path.join(downloadsDir, filename);
 
     const response = await net.fetch(cachedInfo.downloadUrl);
@@ -218,13 +249,50 @@ export function buildUpdateScript(params: {
 }
 
 /**
- * Download .app.zip, extract it, spawn a detached shell script that waits for
- * the app to quit then replaces the .app bundle and relaunches.
+ * Windows: download the Squirrel `Setup.exe` and launch it detached, then quit
+ * so it can overwrite the running binaries. Squirrel's setup installs into
+ * %LOCALAPPDATA% and relaunches the app itself.
+ *
+ * Falls back to downloadUpdate() (reveal in Explorer) if no .exe asset matched.
+ */
+async function installUpdateWindows(): Promise<{ ok: boolean; error?: string }> {
+  if (!cachedInfo?.downloadUrl) return downloadUpdate();
+  if (downloading) return { ok: false, error: 'Already downloading' };
+  downloading = true;
+
+  try {
+    const tmpDir = path.join(os.tmpdir(), `smalti-update-${Date.now()}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const setupPath = path.join(tmpDir, `smalti-setup-${cachedInfo.latestTag}.exe`);
+
+    const response = await net.fetch(cachedInfo.downloadUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    fs.writeFileSync(setupPath, Buffer.from(await response.arrayBuffer()));
+
+    // Detached so the installer outlives us — it can't replace the binaries
+    // while this process still holds them open.
+    spawn(setupPath, [], { detached: true, stdio: 'ignore' }).unref();
+    app.quit();
+    return { ok: true };
+  } catch (err) {
+    downloading = false;
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * macOS: download .app.zip, extract it, spawn a detached shell script that waits
+ * for the app to quit then replaces the .app bundle and relaunches.
  * Falls back to downloadUpdate() if no zip asset is present.
+ *
+ * On Windows this delegates to the Squirrel installer path instead.
  */
 export async function installUpdate(): Promise<{ ok: boolean; error?: string }> {
   if (!app.isPackaged) {
     return { ok: false, error: 'Auto-install only available in packaged app' };
+  }
+  if (process.platform === 'win32') {
+    return installUpdateWindows();
   }
   if (!cachedInfo?.zipDownloadUrl) {
     // No zip asset — fall back to the DMG download path
